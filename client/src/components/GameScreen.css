@@ -1,0 +1,235 @@
+
+.game-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.game-info-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #777d73;
+}
+
+.leave-game-button {
+  border: 1px solid #ccd3c9;
+  color: #284632;
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.turn-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: #f4f7f1;
+  border: 1px solid #dce5d8;
+  border-radius: 14px;
+  padding: 18px;
+}
+
+.turn-label {
+  font-size: 12px;
+  color: #777d73;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.turn-panel h2 {
+  margin: 8px 0;
+}
+
+.turn-panel p {
+  margin: 0;
+  font-size: 13px;
+  color: #777d73;
+}
+
+.dice-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dice-face {
+  font-size: 52px;
+  line-height: 1;
+  color: #284632;
+}
+
+.dice-panel button {
+  white-space: nowrap;
+}
+
+.game-players {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.game-player-card {
+  border: 1px solid #dce5d8;
+  border-radius: 12px;
+  background: #fafbf9;
+  padding: 14px;
+  min-width: 0;
+}
+
+.active-player {
+  border-color: #65904f;
+  background: #edf2e9;
+  box-shadow: 0 0 0 1px #65904f;
+}
+
+.game-player-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.game-player-piece {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.player-money {
+  font-size: 20px;
+  font-weight: bold;
+  margin-top: 12px;
+}
+
+.player-location {
+  font-size: 12px;
+  color: #777d73;
+  margin-top: 6px;
+}
+
+.game-message {
+  padding: 14px;
+  background: #f4efe3;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.winner-banner {
+  border-radius: 12px;
+  background: #f8edbf;
+  padding: 20px;
+  text-align: center;
+}
+
+.winner-banner h2 {
+  margin: 0;
+}
+
+.winner-banner p {
+  margin-bottom: 0;
+}
+
+@media (max-width: 700px) {
+  .game-players {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .turn-panel {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .dice-panel {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+
+.owned-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid #dce5d8;
+  padding-top: 10px;
+  margin-top: 12px;
+}
+
+.owned-properties > strong {
+  font-size: 12px;
+}
+
+.owned-property {
+  background: #e3ebf8;
+  color: #315da8;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.no-properties {
+  font-size: 11px;
+  color: #92988e;
+}
+
+.eliminated-player {
+  opacity: 0.5;
+  background: #eeeeee;
+}
+
+.eliminated-player .player-money {
+  color: #c0392b;
+}
+
+
+.movement-progress {
+  height: 5px;
+  width: 100%;
+  background: #e1e8dc;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.movement-progress-bar {
+  width: 35%;
+  height: 100%;
+  background: #65904f;
+  border-radius: 10px;
+  animation: movement-progress 1s ease-in-out infinite;
+}
+
+@keyframes movement-progress {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .movement-progress-bar {
+    animation: none;
+    width: 100%;
+  }
+}
+
+.player-skip-status {
+  margin-top: 8px;
+  padding: 7px 9px;
+  border: 1px solid #e7d9a6;
+  border-radius: 6px;
+  background: #fff3cc;
+  color: #89691d;
+  font-size: 12px;
+  font-weight: bold;
+}

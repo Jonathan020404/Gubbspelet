@@ -260,3 +260,28 @@ input:focus {
     padding: 24px;
   }
 }
+
+
+.game-container-wide {
+  max-width: 1600px;
+  padding: 24px;
+}
+
+.game-container-wide .game-header {
+  margin-bottom: 20px;
+}
+
+.game-container-wide .game-header h1 {
+  font-size: 32px;
+}
+
+@media (max-width: 700px) {
+  .game-container-wide {
+    padding: 14px;
+  }
+
+  .game-container-wide .game-header h1 {
+    font-size: 28px;
+  }
+}
+

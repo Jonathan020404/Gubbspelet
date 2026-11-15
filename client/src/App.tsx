@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { socket } from "./socket";
 import type { Room } from "./types";
 import "./App.css";
+import GameScreen from "./components/GameScreen";
 
 type Screen = "menu" | "create" | "join" | "lobby";
 
@@ -99,11 +100,16 @@ function App() {
   const isHost = room?.hostId === socket.id;
 
   return (
-    <main className="app">
-      <div className="game-container">
+    <main className="app">  
+      <div
+        className={
+          "game-container" +
+          (room?.game ? " game-container-wide" : "")
+        }
+      >
         <header className="game-header">
           <div className="board-decoration">
-            <span className="tile blue">IKEA</span>
+            <span className="tile blue">Bilaffär</span>
             <span className="tile yellow">?</span>
             <span className="tile orange">Lotteri</span>
           </div>
@@ -219,7 +225,7 @@ function App() {
           </form>
         )}
 
-        {screen === "lobby" && room && (
+        {screen === "lobby" && room && !room.game && (
           <div className="menu">
             <div className="room-code">
               <p>Rumskod</p>
@@ -257,9 +263,15 @@ function App() {
             </div>
 
             {isHost ? (
-              <button className="primary-button" disabled>
-                Starta spel (kommer snart)
-              </button>
+              
+                <button
+                  className="primary-button"
+                  disabled={room.players.length < 2 || !connected}
+                  onClick={() => socket.emit("startGame")}
+                >
+                  Starta spel
+                </button>
+
             ) : (
               <p className="waiting-text">
                 Väntar på att värden startar spelet...
@@ -274,6 +286,27 @@ function App() {
             </button>
           </div>
         )}
+
+
+        
+        
+        {screen === "lobby" && room?.game && (
+          <GameScreen
+            game={room.game}
+            playerId={socket.id ?? ""}
+            roomCode={room.code}
+            onRoll={() => socket.emit("rollDice")}
+            onLeave={leaveRoom}
+            onPurchaseDecision={(decision) =>
+              socket.emit("purchaseDecision", decision)
+            }
+            onContinueChance={(token) =>
+              socket.emit("continueChance", token)
+            }
+          />
+        )}
+
+
 
         {error && <p className="error">{error}</p>}
 

@@ -1,0 +1,180 @@
+
+.chance-dialog {
+  border: none;
+  padding: 0;
+  border-radius: 24px;
+  background: transparent;
+  width: min(440px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  margin: auto;
+  color: #322b16;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.chance-dialog::backdrop {
+  background: rgba(20, 27, 23, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.chance-card {
+  background: #fffbea;
+  border: 3px solid #d9ac29;
+  border-radius: 24px;
+  padding: 28px;
+  text-align: center;
+  animation: chance-card-enter 0.3s ease-out;
+}
+
+@keyframes chance-card-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(15px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.chance-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 1.5px;
+  color: #967627;
+}
+
+.chance-symbol {
+  display: grid;
+  place-items: center;
+  width: 90px;
+  height: 90px;
+  margin: 28px auto 18px;
+  border: 2px solid #cba52d;
+  border-radius: 18px;
+  background: #eacc39;
+  color: #4c3d13;
+  font-size: 64px;
+  font-weight: bold;
+  box-shadow: 0 5px 0 #cba52d;
+}
+
+.chance-player {
+  font-size: 14px;
+  color: #867341;
+  margin: 24px 0 12px;
+}
+
+.chance-card-text {
+  font-size: 23px;
+  line-height: 1.5;
+  font-weight: bold;
+  margin: 0 0 24px;
+}
+
+.chance-effect {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #f3e9c9;
+  border: 1px solid #e7d9a6;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.chance-effect-icon {
+  font-size: 26px;
+}
+
+.chance-effect > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+}
+
+.chance-effect strong {
+  font-size: 15px;
+  color: #785c1d;
+}
+
+.chance-effect small {
+  font-size: 12px;
+  color: #967c41;
+}
+
+.chance-continue-button {
+  border: none;
+  border-radius: 12px;
+  width: 100%;
+  padding: 16px;
+  background: #284632;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.chance-continue-button:hover {
+  background: #3b6046;
+}
+
+.chance-waiting {
+  padding: 16px;
+  border-radius: 12px;
+  background: #eee6cc;
+  color: #8c7948;
+  font-size: 14px;
+}
+
+.chance-card-footer {
+  margin-top: 22px;
+  color: #b5a16b;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 3px;
+}
+
+@media (max-width: 480px) {
+  .chance-card {
+    padding: 20px;
+  }
+
+  .chance-card-text {
+    font-size: 19px;
+  }
+
+  .chance-symbol {
+    width: 70px;
+    height: 70px;
+    font-size: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chance-card {
+    animation: none;
+  }
+}
+
+
+.chance-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.chance-effects .chance-effect {
+  margin-bottom: 0;
+  justify-content: flex-start;
+}
+
+.chance-effects .chance-effect-icon {
+  flex-shrink: 0;
+}

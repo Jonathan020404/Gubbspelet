@@ -1,0 +1,144 @@
+
+.purchase-panel {
+  background: #fffdf7;
+  border: 2px solid #315da8;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.purchase-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e3e5df;
+}
+
+.purchase-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  background: #315da8;
+  font-size: 28px;
+}
+
+.purchase-kicker {
+  color: #777d73;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.purchase-header h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.discount-badge {
+  margin-left: auto;
+  background: #e1eedc;
+  color: #37682b;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.purchase-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.purchase-details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #f0f2eb;
+  padding: 14px;
+  border-radius: 10px;
+}
+
+.purchase-details span {
+  color: #687862;
+  font-size: 12px;
+}
+
+.purchase-details strong {
+  color: #284632;
+  font-size: 20px;
+}
+
+.purchase-details del {
+  color: #777d73;
+  font-size: 12px;
+}
+
+.purchase-panel h3 {
+  margin-bottom: 8px;
+}
+
+.purchase-panel p {
+  font-size: 14px;
+}
+
+.purchase-balance {
+  color: #687862;
+}
+
+.purchase-warning {
+  color: #c0392b;
+}
+
+.purchase-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.purchase-waiting {
+  text-align: center;
+  padding-top: 20px;
+}
+
+.purchase-waiting > span {
+  display: block;
+  font-size: 26px;
+  margin-bottom: 10px;
+}
+
+.purchase-waiting p {
+  color: #777d73;
+}
+
+.purchase-progress {
+  text-align: center;
+  color: #777d73;
+  margin-bottom: 0;
+  margin-top: 18px;
+}
+
+@media (max-width: 480px) {
+  .purchase-panel {
+    padding: 14px;
+  }
+
+  .purchase-header h2 {
+    font-size: 17px;
+  }
+
+  .purchase-details strong {
+    font-size: 16px;
+  }
+
+  .purchase-buttons {
+    grid-template-columns: 1fr;
+  }
+}
