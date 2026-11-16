@@ -1,9 +1,7 @@
-
 import express from "express";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { Server } from "socket.io";
-
 
 import {
   createGame,
@@ -15,9 +13,7 @@ import {
   advanceGroupMovement,
 } from "./game/engine";
 
-
 import type { GameState } from "./game/engine";
-
 
 const app = express();
 const httpServer = createServer(app);
@@ -110,11 +106,7 @@ io.on("connection", (socket) => {
       code?: unknown;
     };
 
-    if (
-      typeof name !== "string" ||
-      !name.trim() ||
-      typeof code !== "string"
-    ) {
+    if (typeof name !== "string" || !name.trim() || typeof code !== "string") {
       socket.emit("roomError", "Ange namn och rumskod.");
       return;
     }
@@ -138,10 +130,7 @@ io.on("connection", (socket) => {
     }
 
     if (room.game) {
-      socket.emit(
-        "roomError",
-        "Spelet har redan börjat."
-      );
+      socket.emit("roomError", "Spelet har redan börjat.");
       return;
     }
 
@@ -159,239 +148,210 @@ io.on("connection", (socket) => {
     console.log(name, "joined room", roomCode);
   });
 
+  socket.on("startGame", () => {
+    const code = socket.data.roomCode;
+    const room = rooms.get(code);
 
-socket.on("startGame", () => {
-  const code = socket.data.roomCode;
-  const room = rooms.get(code);
+    if (!room) return;
 
-  if (!room) return;
-
-  // Only the host can start the game.
-  if (room.hostId !== socket.id) {
-    return;
-  }
-
-  if (room.players.length < 2) {
-    socket.emit(
-      "roomError",
-      "Minst två spelare krävs."
-    );
-    return;
-  }
-
-  if (room.game) {
-    return;
-  }
-
-  room.game = createGame(room.players);
-
-  io.to(code).emit("roomUpdated", room);
-
-  console.log("Game started in room", code);
-});
-
-
-
-socket.on("rollDice", () => {
-  const code = socket.data.roomCode;
-  const room = rooms.get(code);
-
-  if (!room?.game) return;
-
-  const game = room.game;
-
-  // Calculate the dice roll and movement path.
-  const movement = beginRoll(game, socket.id);
-
-  if (!movement) return;
-
-  const player = game.players.find(
-    (p) => p.id === movement.playerId
-  );
-
-  if (!player) return;
-
-  // Tell everyone the dice result and lock the turn.
-  io.to(code).emit("roomUpdated", room);
-
-  let stepIndex = 0;
-
-  const playNextStep = () => {
-    // Stop if the room or game was removed.
-    // This also handles someone leaving mid-game.
-    if (
-      rooms.get(code) !== room ||
-      room.game !== game ||
-      game.phase !== "moving"
-    ) {
+    // Only the host can start the game.
+    if (room.hostId !== socket.id) {
       return;
     }
 
-    // All movement steps are finished.
-    if (stepIndex >= movement.path.length) {
-      completeRoll(game, movement);
-
-      io.to(code).emit("roomUpdated", room);
+    if (room.players.length < 2) {
+      socket.emit("roomError", "Minst två spelare krävs.");
       return;
     }
 
-    // Move the piece one square.
-    const nextTileId = movement.path[stepIndex];
-
-    player.tileId = nextTileId;
-
-    stepIndex++;
-
-    // Show a special message at the first bus stop.
-    if (
-      movement.busFrom &&
-      nextTileId === movement.busFrom &&
-      stepIndex === movement.path.length - 1
-    ) {
-      game.message =
-        player.name +
-        " landade på Buss och åker vidare...";
+    if (room.game) {
+      return;
     }
 
-    // Broadcast this step to all players.
+    room.game = createGame(room.players);
+
     io.to(code).emit("roomUpdated", room);
 
-    const isWaitingForBus =
-      movement.busFrom !== null &&
-      nextTileId === movement.busFrom &&
-      stepIndex === movement.path.length - 1;
+    console.log("Game started in room", code);
+  });
 
-    let delay = MOVE_DELAY;
+  socket.on("rollDice", () => {
+    const code = socket.data.roomCode;
+    const room = rooms.get(code);
 
-    if (isWaitingForBus) {
-      delay = BUS_DELAY;
-    } else if (
-      stepIndex === movement.path.length
-    ) {
-      delay = LANDING_DELAY;
+    if (!room?.game) return;
+
+    const game = room.game;
+
+    // Calculate the dice roll and movement path.
+    const movement = beginRoll(game, socket.id);
+
+    if (!movement) return;
+
+    const player = game.players.find((p) => p.id === movement.playerId);
+
+    if (!player) return;
+
+    // Tell everyone the dice result and lock the turn.
+    io.to(code).emit("roomUpdated", room);
+
+    let stepIndex = 0;
+
+    const playNextStep = () => {
+      // Stop if the room or game was removed.
+      // This also handles someone leaving mid-game.
+      if (
+        rooms.get(code) !== room ||
+        room.game !== game ||
+        game.phase !== "moving"
+      ) {
+        return;
+      }
+
+      // All movement steps are finished.
+      if (stepIndex >= movement.path.length) {
+        completeRoll(game, movement);
+
+        io.to(code).emit("roomUpdated", room);
+        return;
+      }
+
+      // Move the piece one square.
+      const nextTileId = movement.path[stepIndex];
+
+      player.tileId = nextTileId;
+
+      stepIndex++;
+
+      // Show a special message at the first bus stop.
+      if (
+        movement.busFrom &&
+        nextTileId === movement.busFrom &&
+        stepIndex === movement.path.length - 1
+      ) {
+        game.message = player.name + " landade på Buss och åker vidare...";
+      }
+
+      // Broadcast this step to all players.
+      io.to(code).emit("roomUpdated", room);
+
+      const isWaitingForBus =
+        movement.busFrom !== null &&
+        nextTileId === movement.busFrom &&
+        stepIndex === movement.path.length - 1;
+
+      let delay = MOVE_DELAY;
+
+      if (isWaitingForBus) {
+        delay = BUS_DELAY;
+      } else if (stepIndex === movement.path.length) {
+        delay = LANDING_DELAY;
+      }
+
+      setTimeout(playNextStep, delay);
+    };
+
+    // Give everyone a moment to see the dice result.
+    setTimeout(playNextStep, MOVE_DELAY);
+  });
+
+  const groupTimers = new WeakMap<GameState, ReturnType<typeof setTimeout>>();
+
+  function scheduleGroupMovement(room: Room, delay: number = MOVE_DELAY) {
+    const game = room.game;
+
+    if (!game || !hasGroupMovement(game)) {
+      return;
     }
 
-    setTimeout(playNextStep, delay);
-  };
+    // Avoid starting two timers for the same game.
+    if (groupTimers.has(game)) {
+      return;
+    }
 
-  // Give everyone a moment to see the dice result.
-  setTimeout(playNextStep, MOVE_DELAY);
-});
+    const timer = setTimeout(() => {
+      groupTimers.delete(game);
 
+      // Stop if someone left or the game ended.
+      if (
+        rooms.get(room.code) !== room ||
+        room.game !== game ||
+        game.phase !== "moving"
+      ) {
+        return;
+      }
 
-const groupTimers = new WeakMap<
-  GameState,
-  ReturnType<typeof setTimeout>
->();
+      const nextDelay = advanceGroupMovement(game);
 
-function scheduleGroupMovement(
-  room: Room,
-  delay: number = MOVE_DELAY
-) {
-  const game = room.game;
+      // Send the updated positions to everyone.
+      io.to(room.code).emit("roomUpdated", room);
 
-  if (!game || !hasGroupMovement(game)) {
-    return;
+      // Continue the animation if needed.
+      if (nextDelay !== null) {
+        scheduleGroupMovement(room, nextDelay);
+      }
+    }, delay);
+
+    groupTimers.set(game, timer);
   }
 
-  // Avoid starting two timers for the same game.
-  if (groupTimers.has(game)) {
-    return;
-  }
+  socket.on("purchaseDecision", (decision: unknown) => {
+    const code = socket.data.roomCode;
+    const room = rooms.get(code);
 
-  const timer = setTimeout(() => {
-    groupTimers.delete(game);
+    if (!room?.game) return;
 
-    // Stop if someone left or the game ended.
+    if (decision !== "buy" && decision !== "decline") {
+      return;
+    }
+
+    const success = respondToPurchase(room.game, socket.id, decision);
+
+    if (!success) {
+      socket.emit("roomError", "Det gick inte att genomföra köpet.");
+      return;
+    }
+
+    io.to(code).emit("roomUpdated", room);
+    scheduleGroupMovement(room);
+  });
+
+  socket.on("continueChance", (token: unknown, choiceIndex?: unknown) => {
+    const code = socket.data.roomCode;
+    const room = rooms.get(code);
+
+    if (!room?.game) return;
+
+    if (typeof token !== "string") {
+      return;
+    }
+
+    // Choices are optional, but if provided,
+    // they must be valid integer numbers.
     if (
-      rooms.get(room.code) !== room ||
-      room.game !== game ||
-      game.phase !== "moving"
+      choiceIndex !== undefined &&
+      (typeof choiceIndex !== "number" || !Number.isInteger(choiceIndex))
     ) {
       return;
     }
 
-    const nextDelay =
-      advanceGroupMovement(game);
-
-    // Send the updated positions to everyone.
-    io.to(room.code).emit(
-      "roomUpdated",
-      room
+    const success = respondToChance(
+      room.game,
+      socket.id,
+      token,
+      typeof choiceIndex === "number" ? choiceIndex : undefined,
     );
 
-    // Continue the animation if needed.
-    if (nextDelay !== null) {
-      scheduleGroupMovement(
-        room,
-        nextDelay
-      );
+    if (!success) {
+      return;
     }
-  }, delay);
 
-  groupTimers.set(game, timer);
-}
+    io.to(code).emit("roomUpdated", room);
 
-
-
-socket.on("purchaseDecision", (decision: unknown) => {
-  const code = socket.data.roomCode;
-  const room = rooms.get(code);
-
-  if (!room?.game) return;
-
-  if (decision !== "buy" && decision !== "decline") {
-    return;
-  }
-
-  const success = respondToPurchase(
-    room.game,
-    socket.id,
-    decision
-  );
-
-  if (!success) {
-    socket.emit(
-      "roomError",
-      "Det gick inte att genomföra köpet."
-    );
-    return;
-  }
-
-  io.to(code).emit("roomUpdated", room);
-  scheduleGroupMovement(room);
-});
-
-
-
-socket.on("continueChance", (token: unknown) => {
-  const code = socket.data.roomCode;
-  const room = rooms.get(code);
-
-  if (!room?.game) return;
-
-  if (typeof token !== "string") {
-    return;
-  }
-
-  const success = respondToChance(
-    room.game,
-    socket.id,
-    token
-  );
-
-  if (!success) {
-    return;
-  }
-
-  io.to(code).emit("roomUpdated", room);
-
-  // Start an animation if the card caused
-  // everyone to move.
-  scheduleGroupMovement(room);
-});
-
-
+    // Animate any group movement caused
+    // by the selected card effect.
+    scheduleGroupMovement(room);
+  });
 
   // Remove a player from their current room
   function leaveRoom() {
@@ -410,9 +370,7 @@ socket.on("continueChance", (token: unknown) => {
       delete room.game;
     }
 
-    room.players = room.players.filter(
-      (player) => player.id !== socket.id
-    );
+    room.players = room.players.filter((player) => player.id !== socket.id);
 
     if (room.players.length === 0) {
       rooms.delete(code);
@@ -426,8 +384,6 @@ socket.on("continueChance", (token: unknown) => {
     }
 
     io.to(code).emit("roomUpdated", room);
-
-    
   }
 
   socket.on("leaveRoom", () => {

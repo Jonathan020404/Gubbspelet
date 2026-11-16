@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { socket } from "./socket";
 import type { Room } from "./types";
@@ -100,11 +99,10 @@ function App() {
   const isHost = room?.hostId === socket.id;
 
   return (
-    <main className="app">  
+    <main className="app">
       <div
         className={
-          "game-container" +
-          (room?.game ? " game-container-wide" : "")
+          "game-container" + (room?.game ? " game-container-wide" : "")
         }
       >
         <header className="game-header">
@@ -115,9 +113,7 @@ function App() {
           </div>
 
           <h1>Gubbspelet</h1>
-          <p className="subtitle">
-            Det klassiska familjespelet
-          </p>
+          <p className="subtitle">Det klassiska familjespelet</p>
         </header>
 
         {screen === "menu" && (
@@ -238,9 +234,7 @@ function App() {
             <div className="player-list">
               {room.players.map((player, index) => (
                 <div className="player" key={player.id}>
-                  <div
-                    className={"player-avatar color-" + index}
-                  >
+                  <div className={"player-avatar color-" + index}>
                     {player.name.charAt(0).toUpperCase()}
                   </div>
 
@@ -263,33 +257,25 @@ function App() {
             </div>
 
             {isHost ? (
-              
-                <button
-                  className="primary-button"
-                  disabled={room.players.length < 2 || !connected}
-                  onClick={() => socket.emit("startGame")}
-                >
-                  Starta spel
-                </button>
-
+              <button
+                className="primary-button"
+                disabled={room.players.length < 2 || !connected}
+                onClick={() => socket.emit("startGame")}
+              >
+                Starta spel
+              </button>
             ) : (
               <p className="waiting-text">
                 Väntar på att värden startar spelet...
               </p>
             )}
 
-            <button
-              className="secondary-button"
-              onClick={leaveRoom}
-            >
+            <button className="secondary-button" onClick={leaveRoom}>
               Lämna rum
             </button>
           </div>
         )}
 
-
-        
-        
         {screen === "lobby" && room?.game && (
           <GameScreen
             game={room.game}
@@ -300,25 +286,21 @@ function App() {
             onPurchaseDecision={(decision) =>
               socket.emit("purchaseDecision", decision)
             }
-            onContinueChance={(token) =>
-              socket.emit("continueChance", token)
-            }
+            onContinueChance={(token, choiceIndex) => {
+              if (choiceIndex === undefined) {
+                socket.emit("continueChance", token);
+              } else {
+                socket.emit("continueChance", token, choiceIndex);
+              }
+            }}
           />
         )}
-
-
 
         {error && <p className="error">{error}</p>}
 
         <footer className="connection-status">
-          <span
-            className={
-              connected ? "status-dot online" : "status-dot"
-            }
-          />
-          {connected
-            ? "Ansluten till servern"
-            : "Inte ansluten till servern"}
+          <span className={connected ? "status-dot online" : "status-dot"} />
+          {connected ? "Ansluten till servern" : "Inte ansluten till servern"}
         </footer>
       </div>
     </main>

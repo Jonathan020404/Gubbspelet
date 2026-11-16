@@ -1,4 +1,3 @@
-
 .chance-dialog {
   border: none;
   padding: 0;
@@ -162,7 +161,6 @@
   }
 }
 
-
 .chance-effects {
   display: flex;
   flex-direction: column;
@@ -177,4 +175,179 @@
 
 .chance-effects .chance-effect-icon {
   flex-shrink: 0;
+}
+
+.chance-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chance-choices h3 {
+  margin: 0 0 4px;
+  color: #785c1d;
+  font-size: 15px;
+}
+
+.chance-choice-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #d9c48b;
+  border-radius: 12px;
+  background: #f3e9c9;
+  color: #785c1d;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    background-color 0.15s;
+}
+
+.chance-choice-button:hover {
+  background: #e9d9a5;
+  transform: translateY(-2px);
+}
+
+.chance-choice-button:active {
+  transform: translateY(0);
+}
+
+.chance-choice-primary {
+  background: #284632;
+  color: white;
+  border-color: #284632;
+}
+
+.chance-choice-primary:hover {
+  background: #3b6046;
+}
+
+.chance-choice-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.chance-choice-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 5px;
+}
+
+.chance-choice-content strong {
+  font-size: 15px;
+}
+
+.chance-choice-content small {
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+.chance-choice-arrow {
+  font-size: 24px;
+}
+
+.chance-choice-preview {
+  padding: 13px;
+  border: 1px solid #e7d9a6;
+  border-radius: 10px;
+  background: #f3e9c9;
+  color: #785c1d;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chance-choice-button {
+    transition: none;
+  }
+
+  .chance-choice-button:hover {
+    transform: none;
+  }
+}
+
+.chance-dice-outcomes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.chance-dice-outcome {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f3e9c9;
+  border: 1px solid #e7d9a6;
+  border-radius: 10px;
+  color: #785c1d;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.chance-dice-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 38px;
+  background: white;
+  border-radius: 8px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.chance-dice-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  margin-bottom: 18px;
+  border: 1px solid #b9d0ae;
+  border-radius: 14px;
+  background: #e5eedc;
+  color: #284632;
+  text-align: center;
+}
+
+.chance-dice-face {
+  font-size: 90px;
+  line-height: 1;
+  color: #284632;
+  animation: chance-dice-pop 0.3s ease-out;
+}
+
+.chance-dice-result h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.chance-dice-result p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+@keyframes chance-dice-pop {
+  from {
+    transform: scale(0.5) rotate(-15deg);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chance-dice-face {
+    animation: none;
+  }
 }

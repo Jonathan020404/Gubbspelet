@@ -1,0 +1,74 @@
+.hospital-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.hospital-panel {
+  padding: 14px;
+  background: #fce8e6;
+  border: 1px solid #e2b8b1;
+  border-radius: 12px;
+  color: #843d35;
+}
+
+.hospital-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hospital-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: white;
+  border-radius: 10px;
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.hospital-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hospital-header-text strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.hospital-header-text small {
+  font-size: 12px;
+  color: #9a554c;
+}
+
+.hospital-release {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2b8b1;
+}
+
+.hospital-release small {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hospital-squares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hospital-square {
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: white;
+  font-size: 12px;
+}

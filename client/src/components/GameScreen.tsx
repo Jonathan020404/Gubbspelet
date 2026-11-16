@@ -1,11 +1,11 @@
-
 import type { GameState } from "../types";
 import GameBoard from "./GameBoard";
 import "./GameScreen.css";
 import PurchaseCard from "./PurchaseCard";
 import ChanceCardModal from "./ChanceCardModal";
-
-
+import ActiveRewards from "./ActiveRewards";
+import LoanStatus from "./LoanStatus";
+import HospitalStatus from "./HospitalStatus";
 
 interface GameScreenProps {
   game: GameState;
@@ -13,22 +13,11 @@ interface GameScreenProps {
   roomCode: string;
   onRoll: () => void;
   onLeave: () => void;
-  onPurchaseDecision: (
-    decision: "buy" | "decline"
-  ) => void;
-  onContinueChance: (token: string) => void;
+  onPurchaseDecision: (decision: "buy" | "decline") => void;
+  onContinueChance: (token: string, choiceIndex?: number) => void;
 }
 
-
-
-const DICE_FACES = [
-  "⚀",
-  "⚁",
-  "⚂",
-  "⚃",
-  "⚄",
-  "⚅",
-];
+const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 
 export default function GameScreen({
   game,
@@ -39,34 +28,21 @@ export default function GameScreen({
   onPurchaseDecision,
   onContinueChance,
 }: GameScreenProps) {
-
   const currentPlayer = game.players[game.turnIndex];
 
-  const isMyTurn =
-    currentPlayer.id === playerId;
+  const isMyTurn = currentPlayer.id === playerId;
 
-  const winner = game.players.find(
-    (player) => player.id === game.winnerId
-  );
+  const winner = game.players.find((player) => player.id === game.winnerId);
 
   return (
     <div className="game-screen">
-
-
-
-
-
       <div className="game-info-bar">
         <span>Rum: {roomCode}</span>
 
         <button
           className="leave-game-button"
           onClick={() => {
-            if (
-              window.confirm(
-                "Vill du lämna spelet?"
-              )
-            ) {
+            if (window.confirm("Vill du lämna spelet?")) {
               onLeave();
             }
           }}
@@ -84,191 +60,144 @@ export default function GameScreen({
 
       <div className="turn-panel">
         <div>
-          <span className="turn-label">
-            Nuvarande tur
-          </span>
+          <span className="turn-label">Nuvarande tur</span>
 
-          <h2 style={{ color: currentPlayer.color }}>
-            {currentPlayer.name}
-          </h2>
+          <h2 style={{ color: currentPlayer.color }}>{currentPlayer.name}</h2>
 
-          
-            
-        {!winner && (
-          <p>
-            {game.phase === "moving"
-              ? game.message
-              : game.phase === "purchase"
-                ? "Väntar på köpbeslut..."
-                : game.phase === "chance"
-                  ? "Läser frågekort: " +
-                    (game.players.find(
-                      (player) =>
-                        player.id === game.chanceDraw?.playerId
-                    )?.name ?? "")
-                  : isMyTurn
-                    ? "Det är din tur!"
-                    : "Väntar på " +
-                      currentPlayer.name +
-                      "..."}
-          </p>
-        )}
-
-
+          {!winner && (
+            <p>
+              {game.phase === "moving"
+                ? game.message
+                : game.phase === "purchase"
+                  ? "Väntar på köpbeslut..."
+                  : game.phase === "chance"
+                    ? "Läser frågekort: " +
+                      (game.players.find(
+                        (player) => player.id === game.chanceDraw?.playerId,
+                      )?.name ?? "")
+                    : isMyTurn
+                      ? "Det är din tur!"
+                      : "Väntar på " + currentPlayer.name + "..."}
+            </p>
+          )}
         </div>
 
         <div className="dice-panel">
           <span className="dice-face">
-            {game.lastRoll
-              ? DICE_FACES[game.lastRoll - 1]
-              : "🎲"}
+            {game.lastRoll ? DICE_FACES[game.lastRoll - 1] : "🎲"}
           </span>
 
-          
-        
-            <button
+          <button
             className="primary-button"
-            disabled={
-                !isMyTurn ||
-                game.phase !== "rolling" ||
-                !!winner
-            }
+            disabled={!isMyTurn || game.phase !== "rolling" || !!winner}
             onClick={onRoll}
-            >
-            {game.phase === "moving"
-                ? "Flyttar..."
-                : "Slå tärning"}
-            </button>
-
-
+          >
+            {game.phase === "moving" ? "Flyttar..." : "Slå tärning"}
+          </button>
         </div>
       </div>
 
-      
-        <div className="game-players">
+      <div className="game-players">
         {game.players.map((player) => {
-            const isCurrent =
-            player.id === currentPlayer.id;
+          const isCurrent = player.id === currentPlayer.id;
 
-            const ownedProperties = Object.values(
-            game.properties
-            ).filter(
-            (property) =>
-                game.ownership[property.id] === player.id
-            );
+          const ownedProperties = Object.values(game.properties).filter(
+            (property) => game.ownership[property.id] === player.id,
+          );
 
-            return (
+          return (
             <div
-                key={player.id}
-                className={
+              key={player.id}
+              className={
                 "game-player-card" +
-                (isCurrent && !player.eliminated
-                    ? " active-player"
-                    : "") +
-                (player.eliminated
-                    ? " eliminated-player"
-                    : "")
-                }
+                (isCurrent && !player.eliminated ? " active-player" : "") +
+                (player.eliminated ? " eliminated-player" : "")
+              }
             >
-                <div className="game-player-name">
+              <div className="game-player-name">
                 <span
-                    className="game-player-piece"
-                    style={{
+                  className="game-player-piece"
+                  style={{
                     backgroundColor: player.color,
-                    }}
+                  }}
                 />
 
                 <strong>{player.name}</strong>
 
-                {player.id === playerId && (
-                    <small> (Du)</small>
-                )}
-                </div>
+                {player.id === playerId && <small> (Du)</small>}
+              </div>
 
-                <div className="player-money">
+              <div className="player-money">
                 {player.money.toLocaleString("sv-SE")} kr
-                </div>
+              </div>
 
-                <div className="player-location">
+              <div className="player-location">
                 {player.eliminated
-                    ? "Ute ur spelet"
-                    : game.board.find(
-                        (tile) => tile.id === player.tileId
-                    )?.name}
+                  ? "Ute ur spelet"
+                  : game.board.find((tile) => tile.id === player.tileId)?.name}
+              </div>
+
+              {!player.eliminated && player.skipTurnsRemaining > 0 && (
+                <div className="player-skip-status">
+                  ⏳ Står över {player.skipTurnsRemaining} kast
                 </div>
+              )}
 
-
-                {!player.eliminated &&
-                  player.skipTurnsRemaining > 0 && (
-                    <div className="player-skip-status">
-                      ⏳ Står över {player.skipTurnsRemaining} kast
-                    </div>
-                  )}
-
-
-                <div className="owned-properties">
-                <strong>
-                    Aktiebrev ({ownedProperties.length})
-                </strong>
+              <div className="owned-properties">
+                <strong>Aktiebrev ({ownedProperties.length})</strong>
 
                 {ownedProperties.length === 0 ? (
-                    <span className="no-properties">
-                    Inga aktiebrev
-                    </span>
+                  <span className="no-properties">Inga aktiebrev</span>
                 ) : (
-                    ownedProperties.map((property) => (
+                  ownedProperties.map((property) => (
                     <span
-                        className="owned-property"
-                        key={property.id}
-                        title={
+                      className="owned-property"
+                      key={property.id}
+                      title={
                         "Avgift: " +
                         property.fee.toLocaleString("sv-SE") +
                         " kr"
-                        }
+                      }
                     >
-                        {property.name}
+                      {property.name}
                     </span>
-                    ))
+                  ))
                 )}
-                </div>
+              </div>
             </div>
-            );
+          );
         })}
-        </div>
-
-
-      <div className="game-message">
-        {game.message}
       </div>
 
+      <div className="game-message">{game.message}</div>
 
-        {game.phase === "moving" && (
+      {game.phase === "moving" && (
         <div className="movement-progress">
-            <div className="movement-progress-bar" />
+          <div className="movement-progress-bar" />
         </div>
-        )}
+      )}
 
-
-
-        {game.phase === "purchase" && (
+      {game.phase === "purchase" && (
         <PurchaseCard
-            game={game}
-            playerId={playerId}
-            onDecision={onPurchaseDecision}
+          game={game}
+          playerId={playerId}
+          onDecision={onPurchaseDecision}
         />
-        )}
+      )}
 
+      <ActiveRewards game={game} />
 
-      
-        <GameBoard
+      <LoanStatus game={game} />
+
+      <HospitalStatus game={game} />
+
+      <GameBoard
         tiles={game.board}
-        players={game.players.filter(
-            (player) => !player.eliminated
-        )}
+        players={game.players.filter((player) => !player.eliminated)}
         ownership={game.ownership}
-        />
+      />
 
-        {game.phase === "chance" && game.chanceDraw && (
+      {game.phase === "chance" && game.chanceDraw && (
         <ChanceCardModal
           key={game.chanceDraw.token}
           game={game}
@@ -276,8 +205,6 @@ export default function GameScreen({
           onContinue={onContinueChance}
         />
       )}
-
-
     </div>
   );
 }
