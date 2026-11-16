@@ -46,6 +46,15 @@ export default function ChanceCardModal({
 
   const cardEffect = draw.card.effect;
 
+  // NEW: Check whether this card uses two dice.
+  const isTwoDiceCard =
+    cardEffect.type === "rollForEffect" && cardEffect.diceCount === 2;
+
+  // NEW: Support both one-die and two-dice results.
+  const rolledDice = draw.diceResult
+    ? (draw.diceResult.values ?? [draw.diceResult.value])
+    : [];
+
   return (
     <dialog
       ref={dialogRef}
@@ -75,25 +84,47 @@ export default function ChanceCardModal({
         {/* ORIGINAL CARD TEXT */}
 
         <h2 id="chance-card-heading" className="chance-card-text">
-          {draw.card.text}
+          {draw.card.id === "chance-077" ? (
+            <>
+              <s>Någon</s> Kungen tycker det är kallt <s>ute</s> inne. Ta honom
+              till sjukhuset. Sen när det är din tur så ska du addera 7 steg.
+            </>
+          ) : (
+            draw.card.text
+          )}
         </h2>
 
         {/* SPECIAL DICE CARD: POSSIBLE OUTCOMES */}
 
         {cardEffect.type === "rollForEffect" && (
           <div className="chance-dice-outcomes">
-            {cardEffect.outcomes.map((outcome) => (
-              <div
-                className="chance-dice-outcome"
-                key={outcome.rolls.join("-")}
-              >
-                <span className="chance-dice-number">
-                  {outcome.rolls.join("–")}
-                </span>
+            {cardEffect.calculation === "product" ? (
+              <div className="chance-dice-outcome">
+                <span className="chance-dice-number">🎲 × 🎲</span>
 
-                <span>{outcome.label}</span>
+                <span>
+                  Multiplicera tärningarnas resultat. Betala så många tusen
+                  kronor till valfri spelare.
+                </span>
               </div>
-            ))}
+            ) : (
+              cardEffect.outcomes.map((outcome) => (
+                <div
+                  className="chance-dice-outcome"
+                  key={outcome.rolls.join("-")}
+                >
+                  <span className="chance-dice-number">
+                    {isTwoDiceCard
+                      ? outcome.rolls.length === 1 && outcome.rolls[0] === 12
+                        ? "⚅ ⚅"
+                        : "🎲 🎲"
+                      : outcome.rolls.join("–")}
+                  </span>
+
+                  <span>{outcome.label}</span>
+                </div>
+              ))
+            )}
           </div>
         )}
 
@@ -101,13 +132,25 @@ export default function ChanceCardModal({
 
         {draw.diceResult && (
           <div className="chance-dice-result">
-            <div className="chance-dice-face">
-              {DICE_FACES[draw.diceResult.value - 1]}
+            <div className="chance-result-dice">
+              {rolledDice.map((value, index) => (
+                <span className="chance-dice-face" key={index}>
+                  {DICE_FACES[value - 1]}
+                </span>
+              ))}
             </div>
 
-            <h3>
-              {player?.name} slog {draw.diceResult.value}!
-            </h3>
+            {rolledDice.length === 2 ? (
+              <h3>
+                {player?.name} slog {rolledDice[0]}{" "}
+                {draw.diceResult.calculation === "product" ? "×" : "+"}{" "}
+                {rolledDice[1]} = {draw.diceResult.value}!
+              </h3>
+            ) : (
+              <h3>
+                {player?.name} slog {draw.diceResult.value}!
+              </h3>
+            )}
 
             <p>{draw.diceResult.label}</p>
           </div>
@@ -195,7 +238,9 @@ export default function ChanceCardModal({
             onClick={() => onContinue(draw.token)}
           >
             {cardEffect.type === "rollForEffect"
-              ? "🎲 Slå tärningen"
+              ? isTwoDiceCard
+                ? "🎲🎲 Slå två tärningar"
+                : "🎲 Slå tärningen"
               : "Fortsätt"}
           </button>
         ) : (

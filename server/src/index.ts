@@ -27,6 +27,7 @@ const io = new Server(httpServer, {
 interface Player {
   id: string;
   name: string;
+  isIPhone: boolean;
 }
 
 interface Room {
@@ -61,6 +62,11 @@ app.get("/", (_req, res) => {
 io.on("connection", (socket) => {
   console.log("Player connected:", socket.id);
 
+  // Detect whether the player is using an iPhone.
+  const userAgent = socket.handshake.headers["user-agent"] ?? "";
+
+  const isIPhone = /\biPhone\b/i.test(userAgent);
+
   // Create a new game room
   socket.on("createRoom", (name: unknown) => {
     if (typeof name !== "string" || !name.trim()) {
@@ -82,6 +88,7 @@ io.on("connection", (socket) => {
         {
           id: socket.id,
           name: name.trim().slice(0, 30),
+          isIPhone,
         },
       ],
     };
@@ -137,6 +144,7 @@ io.on("connection", (socket) => {
     room.players.push({
       id: socket.id,
       name: name.trim().slice(0, 30),
+      isIPhone,
     });
 
     socket.join(roomCode);
@@ -213,6 +221,11 @@ io.on("connection", (socket) => {
         completeRoll(game, movement);
 
         io.to(code).emit("roomUpdated", room);
+
+        // Animate any group movement caused
+        // by the remaining queued effects.
+        scheduleGroupMovement(room);
+
         return;
       }
 

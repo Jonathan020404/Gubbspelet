@@ -6,6 +6,8 @@ import ChanceCardModal from "./ChanceCardModal";
 import ActiveRewards from "./ActiveRewards";
 import LoanStatus from "./LoanStatus";
 import HospitalStatus from "./HospitalStatus";
+import RockPaperScissorsModal from "./RockPaperScissorsModal";
+import RollMultiplierStatus from "./RollMultiplierStatus";
 
 interface GameScreenProps {
   game: GameState;
@@ -191,20 +193,45 @@ export default function GameScreen({
 
       <HospitalStatus game={game} />
 
+      <RollMultiplierStatus game={game} />
+
+      <div className="active-lottery">
+        <div className="active-lottery-heading">🎟️ AKTIVT LOTTERI</div>
+
+        {game.activeLotteryCard ? (
+          <>
+            <p className="active-lottery-text">{game.activeLotteryCard.text}</p>
+
+            <p className="active-lottery-note">
+              Gäller alla spelare tills ett nytt Lotteri dras.
+            </p>
+          </>
+        ) : (
+          <p className="active-lottery-note">Inget Lotteri har dragits ännu.</p>
+        )}
+      </div>
+
       <GameBoard
         tiles={game.board}
         players={game.players.filter((player) => !player.eliminated)}
         ownership={game.ownership}
       />
 
-      {game.phase === "chance" && game.chanceDraw && (
-        <ChanceCardModal
-          key={game.chanceDraw.token}
-          game={game}
-          playerId={playerId}
-          onContinue={onContinueChance}
-        />
-      )}
+      {game.chanceDraw &&
+        (game.chanceDraw.rockPaperScissors ? (
+          <RockPaperScissorsModal
+            game={game}
+            playerId={playerId}
+            onContinue={onContinueChance}
+          />
+        ) : (
+          <ChanceCardModal
+            key={game.chanceDraw.token}
+            game={game}
+            playerId={playerId}
+            onContinue={onContinueChance}
+          />
+        ))}
     </div>
   );
 }

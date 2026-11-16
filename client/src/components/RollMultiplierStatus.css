@@ -1,0 +1,53 @@
+.roll-multiplier-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.roll-multiplier-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: #e5eedc;
+  border: 1px solid #b8cfa9;
+  border-radius: 12px;
+  color: #47723c;
+}
+
+.roll-multiplier-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: white;
+  border-radius: 10px;
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.roll-multiplier-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.roll-multiplier-info strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.roll-multiplier-info small {
+  font-size: 12px;
+  color: #52614f;
+}
+
+.roll-multiplier-value {
+  font-size: 28px;
+  font-weight: 800;
+  flex-shrink: 0;
+}

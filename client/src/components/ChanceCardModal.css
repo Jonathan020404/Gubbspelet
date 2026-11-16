@@ -351,3 +351,39 @@
     animation: none;
   }
 }
+
+.chance-modal s {
+  text-decoration: line-through;
+  text-decoration-color: #c0392b;
+  text-decoration-thickness: 2px;
+  color: #a19470;
+}
+
+.chance-result-dice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 12px 0;
+}
+
+.chance-result-dice span {
+  font-size: 52px;
+  line-height: 1;
+}
+
+.chance-dice-result {
+  text-align: center;
+}
+
+.chance-result-dice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.chance-result-dice .chance-dice-face {
+  font-size: 52px;
+  line-height: 1;
+}
