@@ -19,9 +19,20 @@ import type { GameState } from "./game/engine";
 const app = express();
 const httpServer = createServer(app);
 
-const io = new Server(httpServer, {
+/*const io = new Server(httpServer, {
   cors: {
     origin: "http://localhost:5173",
+  },
+});*/
+
+const allowedOrigins = ["http://localhost:5173", process.env.CLIENT_URL].filter(
+  (origin): origin is string => Boolean(origin),
+);
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
   },
 });
 
@@ -494,8 +505,14 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = 3001;
+/*onst PORT = 3001;
 
 httpServer.listen(PORT, () => {
+  console.log("Gubbspelet server running on port", PORT);
+});*/
+
+const PORT = Number(process.env.PORT) || 3001;
+
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log("Gubbspelet server running on port", PORT);
 });

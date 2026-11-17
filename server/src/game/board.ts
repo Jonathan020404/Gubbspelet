@@ -40,7 +40,7 @@ export interface Tile {
   cardCount?: 1 | 2 | 3;
 }
 
-export const STARTING_MONEY = 30_000;
+export const STARTING_MONEY = 200_000;
 
 type TileDefinition = Pick<Tile, "name" | "type" | "propertyId" | "cardCount">;
 

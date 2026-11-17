@@ -9,5 +9,5 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src", "../client/src/types.ts"]
+  "include": ["src"]
 }
