@@ -365,3 +365,95 @@
     animation: none;
   }
 }
+
+/* -----------------------------------
+   BIG DICE BUTTON
+----------------------------------- */
+
+.dice-button-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.roll-dice-button {
+  width: 220px;
+  min-width: 220px;
+  min-height: 52px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: bold;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* -----------------------------------
+   ANIMATED ARROW
+----------------------------------- */
+
+.dice-attention-arrow {
+  position: absolute;
+
+  /* Place the arrow to the left
+     of the dice button */
+  right: calc(100% + 12px);
+  top: 50%;
+
+  transform: translateY(-50%);
+
+  font-family: Arial, sans-serif;
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 1;
+
+  color: #e63946;
+
+  /* Strong outline for visibility */
+  -webkit-text-stroke: 2px #ffffff;
+
+  text-shadow:
+    2px 2px 0 #222,
+    -2px -2px 0 #222,
+    0 3px 5px rgba(0, 0, 0, 0.4);
+
+  pointer-events: none;
+  z-index: 5;
+
+  animation: dice-arrow-bounce 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes dice-arrow-bounce {
+  from {
+    transform: translate(-15px, -50%);
+  }
+
+  to {
+    transform: translate(0, -50%);
+  }
+}
+
+/* -----------------------------------
+   MOBILE
+----------------------------------- */
+
+@media (max-width: 600px) {
+  .roll-dice-button {
+    width: 180px;
+    min-width: 180px;
+    min-height: 50px;
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+
+  .dice-attention-arrow {
+    font-size: 42px;
+    right: calc(100% + 5px);
+  }
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .dice-attention-arrow {
+    animation: none;
+  }
+}

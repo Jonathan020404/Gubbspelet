@@ -348,13 +348,18 @@ export default function GameBoard({
                   ))}
                 </text>
 
-                {/* Larger player pieces and custom avatars */}
+                {/* EXTRA LARGE PLAYER PIECES */}
                 {playersHere.map((player, index) => {
-                  const radius = 13;
+                  // More than twice the previous size.
+                  const radius = 30;
 
-                  const cx = x + (index - (playersHere.length - 1) / 2) * 26;
+                  // Space out players on the same square.
+                  const spacing = 44;
 
-                  const cy = y + 14;
+                  const cx =
+                    x + (index - (playersHere.length - 1) / 2) * spacing;
+
+                  const cy = y + 12;
 
                   const clipId = "avatar-clip-" + tile.id + "-" + player.id;
 
@@ -368,6 +373,7 @@ export default function GameBoard({
                             </clipPath>
                           </defs>
 
+                          {/* Uploaded player image */}
                           <image
                             href={player.avatar}
                             x={cx - radius}
@@ -378,24 +384,48 @@ export default function GameBoard({
                             clipPath={`url(#${clipId})`}
                           />
 
+                          {/* Thick colored border */}
                           <circle
                             cx={cx}
                             cy={cy}
                             r={radius}
                             fill="none"
                             stroke={player.color}
+                            strokeWidth={6}
+                          />
+
+                          {/* White outer outline */}
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={radius + 4}
+                            fill="none"
+                            stroke="#ffffff"
                             strokeWidth={3}
                           />
                         </>
                       ) : (
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={radius}
-                          fill={player.color}
-                          stroke="white"
-                          strokeWidth={2}
-                        />
+                        <>
+                          {/* Colored piece without an image */}
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={radius}
+                            fill={player.color}
+                            stroke="#ffffff"
+                            strokeWidth={5}
+                          />
+
+                          {/* Dark outer outline */}
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={radius + 4}
+                            fill="none"
+                            stroke="#222222"
+                            strokeWidth={2}
+                          />
+                        </>
                       )}
 
                       <title>{player.name}</title>

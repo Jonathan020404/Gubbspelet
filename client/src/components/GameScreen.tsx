@@ -11,6 +11,8 @@ import PropertyInfo from "./PropertyInfo";
 import "./GameScreen.css";
 import DebtModal from "./DebtModal";
 
+import { useEffect, useState } from "react";
+
 interface GameScreenProps {
   game: GameState;
   playerId: string;
@@ -55,6 +57,28 @@ export default function GameScreen({
     game.phase === "rolling" &&
     !currentPlayer.eliminated &&
     !winner;
+
+  // Show the arrow after 2 seconds
+  // if it's still this player's turn to roll.
+  const [showDiceArrow, setShowDiceArrow] = useState(false);
+
+  useEffect(() => {
+    // Hide the arrow immediately when
+    // rolling is no longer allowed.
+    if (!canRoll) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowDiceArrow(true);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [canRoll]);
+
+  const shouldShowDiceArrow = canRoll && showDiceArrow;
 
   return (
     <div className="game-screen">
@@ -189,13 +213,24 @@ export default function GameScreen({
             {game.lastRoll ? DICE_FACES[game.lastRoll - 1] : "🎲"}
           </span>
 
-          <button
-            className="primary-button"
-            disabled={!canRoll}
-            onClick={onRoll}
-          >
-            Slå tärning
-          </button>
+          <div className="dice-button-wrapper">
+            {shouldShowDiceArrow && (
+              <div className="dice-attention-arrow" aria-hidden="true">
+                ➜
+              </div>
+            )}
+
+            <button
+              className="primary-button roll-dice-button"
+              disabled={!canRoll}
+              onClick={() => {
+                setShowDiceArrow(false);
+                onRoll();
+              }}
+            >
+              🎲 Slå tärning
+            </button>
+          </div>
         </div>
       </div>
 
