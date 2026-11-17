@@ -1,79 +1,100 @@
-
 .board-section {
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   width: 100%;
+  min-width: 0;
 }
 
 .board-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin: 0 0 5px;
 }
 
 .board-toolbar h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 15px;
 }
 
 .zoom-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .zoom-controls button {
-  width: 34px;
-  height: 34px;
-  border: 1px solid #ccd3c9;
-  border-radius: 8px;
+  min-width: 32px;
+  height: 32px;
+  padding: 4px 8px;
+  border: 1px solid #888;
+  border-radius: 3px;
   background: white;
-  color: #284632;
-  font-size: 18px;
+  color: #222;
+  cursor: pointer;
+}
+
+.zoom-controls button:hover:not(:disabled) {
+  background: #e8e8e8;
+}
+
+.zoom-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.zoom-controls .zoom-preset {
+  width: auto;
+  font-size: 12px;
 }
 
 .zoom-controls span {
-  font-size: 13px;
-  min-width: 40px;
+  min-width: 42px;
   text-align: center;
+  font-size: 12px;
 }
 
 .board-scroll {
   width: 100%;
-  max-height: 65vh;
+  height: clamp(380px, 68vh, 950px);
   overflow: auto;
+  border: 1px solid #aaa;
+  border-radius: 3px;
   background: #f4efe3;
-  border: 1px solid #ddd8cd;
-  border-radius: 12px;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .game-board {
   display: block;
-  flex-shrink: 0;
+  margin: 0 auto;
+  max-width: none;
 }
 
 .board-legend {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px 16px;
-  padding-top: 14px;
+  gap: 12px;
+  padding: 7px 0 2px;
 }
 
 .board-legend span {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #777d73;
+  gap: 5px;
+  font-size: 11px;
+  color: #444;
 }
 
 .board-legend i {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
+  width: 11px;
+  height: 11px;
+  border: 1px solid #777;
 }
 
 .legend-property {
@@ -90,4 +111,48 @@
 
 .legend-special {
   background: #65904f;
+}
+
+@media (max-width: 600px) {
+  .board-scroll {
+    height: 62dvh;
+    min-height: 320px;
+  }
+
+  .board-toolbar h2 {
+    font-size: 14px;
+  }
+
+  .board-legend {
+    gap: 7px;
+  }
+
+  .board-legend span {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  .board-toolbar {
+    align-items: flex-start;
+  }
+
+  .zoom-controls {
+    gap: 4px;
+  }
+
+  .zoom-controls button {
+    min-width: 34px;
+    height: 34px;
+    padding: 4px 6px;
+  }
+
+  .zoom-controls .zoom-preset {
+    font-size: 11px;
+  }
+
+  .board-scroll {
+    overflow: auto;
+    touch-action: pan-x pan-y;
+  }
 }

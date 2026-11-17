@@ -1,4 +1,3 @@
-
 export type TileType =
   | "start"
   | "finish"
@@ -41,12 +40,9 @@ export interface Tile {
   cardCount?: 1 | 2 | 3;
 }
 
-export const STARTING_MONEY = 200_000;
+export const STARTING_MONEY = 30_000;
 
-type TileDefinition = Pick<
-  Tile,
-  "name" | "type" | "propertyId" | "cardCount"
->;
+type TileDefinition = Pick<Tile, "name" | "type" | "propertyId" | "cardCount">;
 
 function property(id: PropertyId): TileDefinition {
   return {
@@ -64,10 +60,7 @@ function chance(count: 1 | 2 | 3 = 1): TileDefinition {
   };
 }
 
-function special(
-  type: TileType,
-  name: string
-): TileDefinition {
+function special(type: TileType, name: string): TileDefinition {
   return { type, name };
 }
 
@@ -93,7 +86,7 @@ function createRow(
   row: number,
   y: number,
   definitions: TileDefinition[],
-  startX = 0
+  startX = 0,
 ): Tile[] {
   return definitions.map((definition, index) => ({
     ...definition,
@@ -105,19 +98,24 @@ function createRow(
 }
 
 // ROW 1 — Start, moving right.
-const row1 = createRow(1, 0, [
-  special("start", "Start"),
-  lottery,
-  chance(),
-  special("repairShop", "Bilverkstad"),
-  shortcut,
-  car,
-  car,
-  electronics,
-  chance(),
-  furniture,
-  chocolate,
-], 1);
+const row1 = createRow(
+  1,
+  0,
+  [
+    special("start", "Start"),
+    lottery,
+    chance(),
+    special("repairShop", "Bilverkstad"),
+    shortcut,
+    car,
+    car,
+    electronics,
+    chance(),
+    furniture,
+    chocolate,
+  ],
+  1,
+);
 
 // ROW 2 — Moving left.
 const row2 = createRow(2, 2, [
@@ -322,9 +320,7 @@ export const HOSPITAL_TILE_ID = hospital.id;
 export const REPAIR_SHOP_TILE_ID = row1[3].id;
 
 // Find any square quickly using its unique ID.
-export const boardById = new Map(
-  board.map((tile) => [tile.id, tile])
-);
+export const boardById = new Map(board.map((tile) => [tile.id, tile]));
 
 export function getTile(id: string): Tile {
   const tile = boardById.get(id);
@@ -335,6 +331,5 @@ export function getTile(id: string): Tile {
 
   return tile;
 }
-
 
 export const FIRST_GROCERY_TILE_ID = "r2-4";

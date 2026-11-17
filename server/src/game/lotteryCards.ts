@@ -123,7 +123,7 @@ export interface LotteryCard {
 }
 
 export const LOTTERY_CARDS: LotteryCard[] = [
-  /*{
+  {
     id: "lottery-001",
     text: "Om du slår 5 eller 6 så ta ett frågekort.",
     effect: {
@@ -283,7 +283,7 @@ export const LOTTERY_CARDS: LotteryCard[] = [
       amountPerPip: 2_000,
       exemptPropertyId: "bank",
     },
-  },*/
+  },
   {
     id: "lottery-020",
     text: "Onda frågekort! Hamnar man på frågekort (?) så går man 3 steg bakåt och plockar inget kort. Hamnar man på ?? gå 6 steg bakåt. Hamnar man på ??? gå 9 steg bakåt och inkassera 1000.",
@@ -292,7 +292,7 @@ export const LOTTERY_CARDS: LotteryCard[] = [
       stepsPerQuestionMark: 3,
       tripleReward: 1_000,
     },
-  } /*
+  },
   {
     id: "lottery-021",
     text: "Det är lite kallt ute. Slår du 1 så ska du gå bakåt till närmaste Sportbutiken. Slår du 2 så ska du gå bakåt till närmaste Chokladfabriken. Finns ingen bakåt så går du till Start medan spelaren som äger Bilaffären ska betala 2000 till banken. Om alla står på Start så dras nytt lotteri.",
@@ -339,5 +339,5 @@ export const LOTTERY_CARDS: LotteryCard[] = [
       type: "discountBankProperties",
       multiplier: 0.5,
     },
-  },*/,
+  },
 ];

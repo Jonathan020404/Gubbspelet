@@ -1,6 +1,5 @@
 import type { GameState, PropertyId } from "../types";
 import GameBoard from "./GameBoard";
-import "./GameScreen.css";
 import PurchaseCard from "./PurchaseCard";
 import ChanceCardModal from "./ChanceCardModal";
 import ActiveRewards from "./ActiveRewards";
@@ -9,6 +8,8 @@ import HospitalStatus from "./HospitalStatus";
 import RockPaperScissorsModal from "./RockPaperScissorsModal";
 import RollMultiplierStatus from "./RollMultiplierStatus";
 import PropertyInfo from "./PropertyInfo";
+import "./GameScreen.css";
+import DebtModal from "./DebtModal";
 
 interface GameScreenProps {
   game: GameState;
@@ -19,6 +20,10 @@ interface GameScreenProps {
   onPurchaseDecision: (decision: "buy" | "decline") => void;
   onContinueChance: (token: string, choiceIndex?: number) => void;
   onSellProperty: (propertyId: PropertyId) => void;
+  diceAnnouncement: {
+    playerName: string;
+    dice: number;
+  } | null;
 }
 
 const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
@@ -32,10 +37,12 @@ export default function GameScreen({
   onPurchaseDecision,
   onContinueChance,
   onSellProperty,
+  diceAnnouncement,
 }: GameScreenProps) {
   const currentPlayer = game.players[game.turnIndex];
-
   const isMyTurn = currentPlayer.id === playerId;
+
+  const winner = game.players.find((player) => player.id === game.winnerId);
 
   const canSellProperties =
     isMyTurn &&
@@ -43,12 +50,17 @@ export default function GameScreen({
     !currentPlayer.eliminated &&
     !game.winnerId;
 
-  const winner = game.players.find((player) => player.id === game.winnerId);
+  const canRoll =
+    isMyTurn &&
+    game.phase === "rolling" &&
+    !currentPlayer.eliminated &&
+    !winner;
 
   return (
     <div className="game-screen">
+      {/* Small top bar */}
       <div className="game-info-bar">
-        <span>Rum: {roomCode}</span>
+        <span>Gubbspelet — Rum: {roomCode}</span>
 
         <button
           className="leave-game-button"
@@ -69,45 +81,7 @@ export default function GameScreen({
         </div>
       )}
 
-      <div className="turn-panel">
-        <div>
-          <span className="turn-label">Nuvarande tur</span>
-
-          <h2 style={{ color: currentPlayer.color }}>{currentPlayer.name}</h2>
-
-          {!winner && (
-            <p>
-              {game.phase === "moving"
-                ? game.message
-                : game.phase === "purchase"
-                  ? "Väntar på köpbeslut..."
-                  : game.phase === "chance"
-                    ? "Läser frågekort: " +
-                      (game.players.find(
-                        (player) => player.id === game.chanceDraw?.playerId,
-                      )?.name ?? "")
-                    : isMyTurn
-                      ? "Det är din tur!"
-                      : "Väntar på " + currentPlayer.name + "..."}
-            </p>
-          )}
-        </div>
-
-        <div className="dice-panel">
-          <span className="dice-face">
-            {game.lastRoll ? DICE_FACES[game.lastRoll - 1] : "🎲"}
-          </span>
-
-          <button
-            className="primary-button"
-            disabled={!isMyTurn || game.phase !== "rolling" || !!winner}
-            onClick={onRoll}
-          >
-            {game.phase === "moving" ? "Flyttar..." : "Slå tärning"}
-          </button>
-        </div>
-      </div>
-
+      {/* Compact player cards */}
       <div className="game-players">
         {game.players.map((player) => {
           const isCurrent = player.id === currentPlayer.id;
@@ -135,7 +109,11 @@ export default function GameScreen({
 
                 <strong>{player.name}</strong>
 
-                {player.id === playerId && <small> (Du)</small>}
+                {player.id === playerId && <small>(Du)</small>}
+
+                {isCurrent && !player.eliminated && (
+                  <span className="current-turn-tag">Tur</span>
+                )}
               </div>
 
               <div className="player-money">
@@ -150,81 +128,125 @@ export default function GameScreen({
 
               {!player.eliminated && player.skipTurnsRemaining > 0 && (
                 <div className="player-skip-status">
-                  ⏳ Står över {player.skipTurnsRemaining} kast
+                  Står över {player.skipTurnsRemaining} kast
                 </div>
               )}
 
-              <div className="owned-properties">
-                <strong>Aktiebrev ({ownedProperties.length})</strong>
+              <details className="player-properties">
+                <summary>Aktiebrev ({ownedProperties.length})</summary>
 
-                {ownedProperties.length === 0 ? (
-                  <span className="no-properties">Inga aktiebrev</span>
-                ) : (
-                  ownedProperties.map((property) => (
-                    <PropertyInfo
-                      key={property.id}
-                      propertyId={property.id}
-                      name={property.name}
-                      price={property.price}
-                      fee={property.fee}
-                      ownedByMe={player.id === playerId}
-                      canSell={player.id === playerId && canSellProperties}
-                      onSell={onSellProperty}
-                    />
-                  ))
-                )}
-              </div>
+                <div className="owned-properties">
+                  {ownedProperties.length === 0 ? (
+                    <span className="no-properties">Inga aktiebrev</span>
+                  ) : (
+                    ownedProperties.map((property) => (
+                      <PropertyInfo
+                        key={property.id}
+                        propertyId={property.id}
+                        name={property.name}
+                        price={property.price}
+                        fee={property.fee}
+                        ownedByMe={player.id === playerId}
+                        canSell={player.id === playerId && canSellProperties}
+                        onSell={onSellProperty}
+                      />
+                    ))
+                  )}
+                </div>
+              </details>
             </div>
           );
         })}
       </div>
 
-      <div className="game-message">{game.message}</div>
+      {/* Compact turn and dice controls */}
+      <div className="turn-panel">
+        <div className="turn-information">
+          <strong>
+            Tur:{" "}
+            <span style={{ color: currentPlayer.color }}>
+              {currentPlayer.name}
+            </span>
+          </strong>
 
-      {game.phase === "moving" && (
-        <div className="movement-progress">
-          <div className="movement-progress-bar" />
+          <span className="turn-description">
+            {game.phase === "moving"
+              ? "Flyttar..."
+              : game.phase === "purchase"
+                ? "Köpbeslut pågår"
+                : game.phase === "chance"
+                  ? "Frågekort pågår"
+                  : game.phase === "debt"
+                    ? "Väntar på betalning"
+                    : isMyTurn
+                      ? "Din tur att slå!"
+                      : "Väntar på spelaren..."}
+          </span>
         </div>
-      )}
 
-      {game.phase === "purchase" && (
-        <PurchaseCard
-          game={game}
-          playerId={playerId}
-          onDecision={onPurchaseDecision}
-        />
-      )}
+        <div className="dice-panel">
+          <span className="dice-face">
+            {game.lastRoll ? DICE_FACES[game.lastRoll - 1] : "🎲"}
+          </span>
 
-      <ActiveRewards game={game} />
-
-      <LoanStatus game={game} />
-
-      <HospitalStatus game={game} />
-
-      <RollMultiplierStatus game={game} />
-
-      <div className="active-lottery">
-        <div className="active-lottery-heading">🎟️ AKTIVT LOTTERI</div>
-
-        {game.activeLotteryCard ? (
-          <>
-            <p className="active-lottery-text">{game.activeLotteryCard.text}</p>
-
-            <p className="active-lottery-note">
-              Gäller alla spelare tills ett nytt Lotteri dras.
-            </p>
-          </>
-        ) : (
-          <p className="active-lottery-note">Inget Lotteri har dragits ännu.</p>
-        )}
+          <button
+            className="primary-button"
+            disabled={!canRoll}
+            onClick={onRoll}
+          >
+            Slå tärning
+          </button>
+        </div>
       </div>
 
+      {/* Small message instead of a big panel */}
+      <div className="game-message" role="status">
+        {game.message}
+      </div>
+
+      {/* THE BOARD IS THE MAIN CONTENT */}
       <GameBoard
         tiles={game.board}
         players={game.players.filter((player) => !player.eliminated)}
         ownership={game.ownership}
       />
 
+      {/* Optional information below the board */}
+      <details className="game-extra-information">
+        <summary>🎟️ Aktivt Lotteri och spelstatus</summary>
+
+        <div className="extra-information-content">
+          <div className="active-lottery">
+            <strong>Aktivt Lotteri</strong>
+
+            {game.activeLotteryCard ? (
+              <p>{game.activeLotteryCard.text}</p>
+            ) : (
+              <p>Inget Lotteri har dragits ännu.</p>
+            )}
+          </div>
+
+          <ActiveRewards game={game} />
+          <LoanStatus game={game} />
+          <HospitalStatus game={game} />
+          <RollMultiplierStatus game={game} />
+        </div>
+      </details>
+
+      {/* Purchase offer floats over the board */}
+      {game.phase === "purchase" && (
+        <div className="purchase-overlay">
+          <div className="purchase-overlay-content">
+            <PurchaseCard
+              game={game}
+              playerId={playerId}
+              onDecision={onPurchaseDecision}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Keep the existing Frågekort modals */}
       {game.chanceDraw &&
         (game.chanceDraw.rockPaperScissors ? (
           <RockPaperScissorsModal
@@ -240,6 +262,36 @@ export default function GameScreen({
             onContinue={onContinueChance}
           />
         ))}
+
+      {/* Shared dice announcement */}
+      {diceAnnouncement && (
+        <div
+          className="dice-announcement-overlay"
+          role="status"
+          aria-live="assertive"
+        >
+          <div className="dice-announcement-box">
+            <strong>{diceAnnouncement.playerName} slog</strong>
+
+            <div className="dice-announcement-face">
+              {DICE_FACES[diceAnnouncement.dice - 1]}
+            </div>
+
+            <div className="dice-announcement-number">
+              {diceAnnouncement.dice}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Debt popup */}
+      {game.phase === "debt" && game.pendingDebt && (
+        <DebtModal
+          game={game}
+          playerId={playerId}
+          onSellProperty={onSellProperty}
+        />
+      )}
     </div>
   );
 }

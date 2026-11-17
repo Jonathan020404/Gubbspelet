@@ -1519,7 +1519,7 @@ export function movePropertyOwnerBackward(
 // ------------------------------------
 
 export const CHANCE_CARDS: ChanceCard[] = [
-  /*{
+  {
     id: "chance-001",
     text: "Du stänger in din bror i en väska. Skäms och stå över 3 kast.",
     effect: skipTurns(3),
@@ -2892,13 +2892,13 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-173",
     text: "Plocka ett frågekort. Om det står att man ska betala till banken, betala 2 gånger så mycket. Ska man inkassera så får du ta ett lotteri om du vill.",
     effect: drawBankModifiedChance(),
-  },*/
+  },
   {
     id: "chance-174",
     text: "Krösus somnar när han äter pannkakor. Inkassera 10000.",
     effect: gainMoney(10_000),
   },
-  /*
+
   {
     id: "chance-175",
     text: "Spelaren längst bak ska gå 7 steg framåt och spelaren längst fram ska gå 7 steg bakåt. Gäller ej om 2 eller flera personer är längst fram/bak, isåfall ta nytt frågekort.",
@@ -2956,13 +2956,13 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-183",
     text: "En trollkarl vid namn Dumbledore trollar dig framåt till det närmsta lotteriet. Om det inte finns något lotteri framför dig tar du ett frågekort",
     effect: moveToNextLottery(true),
-  },*/
+  },
   {
     id: "chance-184",
     text: "Gå till ett lotteri",
     effect: moveToNearestLottery(),
   },
-  /*
+
   {
     id: "chance-185",
     text: "Slå tärningen och gå bakåt. Om du hamnar på frågekort så ska du ta 2 frågekort. Hamnar du på aktiebrev så får du ta den oavsett om banken eller en annan spelare äger den. Hamnar du på lotteri så går du 15 steg framåt utan att ta ett lotteri.",
@@ -3350,11 +3350,12 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-235",
     text: "Du åker vilse i Sävedalen. Efter att ha tjatat hela dagen att du behöver diskmedel så glömmer du köpa på vägen hem. Åk tillbaka till närmaste Mataffären och betala 10000.",
     effect: sequence(moveToNearestProperty("groceryStore"), loseMoney(10_000)),
-  },*/ {
+  },
+  {
     id: "chance-236",
     text: "Du gör mer pannkakssmet än vad som får plats i bunken. Gå till Sjukhuset  ",
     effect: moveTo(HOSPITAL_TILE_ID),
-  } /*
+  },
   {
     id: "chance-237",
     text: "Du blir irriterad på att en person du aldrig träffat kallas för ”Draken”. Rid på Draken, flyg 10 steg framåt såvida du inte har druckit rakvatten  ",
@@ -3404,5 +3405,72 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-241",
     text: "Du anser dig vara Gotlands starkaste man, men blir nedbrottad av en ekorre. Du är skyldig Gotlands kommun 20000.",
     effect: loseMoney(20_000),
-  },*/,
+  },
+  {
+    id: "chance-242",
+    text: "Du hittar en gammal bil som en gubbe byggt av ost. Slå tärningen. Slår du 1-2 går bilen sönder och du måste till Bilverkstan. Slår du 3-6 fungerar bilen utmärkt och du får åka 10 steg framåt.",
+    effect: rollForEffect(
+      {
+        rolls: [1, 2],
+        label: "Bilen gick sönder! Åk till Bilverkstan.",
+        effect: moveTo(REPAIR_SHOP_TILE_ID),
+      },
+      {
+        rolls: [3, 4, 5, 6],
+        label: "Bilen fungerar! Gå 10 steg framåt.",
+        effect: moveForward(10),
+      },
+    ),
+  },
+  {
+    id: "chance-243",
+    text: "En apa har öppnat en körskola. Slå tärningen. Slår du 1-3 krockar apan och du måste gå till Bilverkstan. Slår du 4-6 kör apan som en mästare och du får gå 10 steg framåt.",
+    effect: rollForEffect(
+      {
+        rolls: [1, 2, 3],
+        label: "Apan krockade! Åk till Bilverkstan.",
+        effect: moveTo(REPAIR_SHOP_TILE_ID),
+      },
+      {
+        rolls: [4, 5, 6],
+        label: "Apan körde perfekt! Gå 10 steg framåt.",
+        effect: moveForward(10),
+      },
+    ),
+  },
+  {
+    id: "chance-244",
+    text: "En gubbe utmanar dig i kapplöpning. Gubben springer åt fel håll och du vinner enkelt. Gå 3 steg framåt.",
+    effect: moveForward(3),
+  },
+  {
+    id: "chance-245",
+    text: "Du hittar ett par magiska skor som gör att du springer snabbare än en älg. Gå 15 steg framåt.",
+    effect: moveForward(15),
+  },
+  {
+    id: "chance-246",
+    text: "En kattunge bygger en raket av gamla konservburkar. Du får följa med på en kort provtur. Gå 6 steg framåt.",
+    effect: moveForward(6),
+  },
+  {
+    id: "chance-247",
+    text: "Du hjälper en gammal gubbe att hitta sina glasögon. De sitter på hans huvud. Som tack får du skjuts 8 steg framåt.",
+    effect: moveForward(8),
+  },
+  {
+    id: "chance-248",
+    text: "En papegoja påstår att den är världens snabbaste taxichaufför. Du tror på den och får åka 9 steg framåt.",
+    effect: moveForward(9),
+  },
+  {
+    id: "chance-249",
+    text: "Du vinner en hopptävling mot en mycket trött sköldpadda. Publiken jublar och du får gå 5 steg framåt.",
+    effect: moveForward(5),
+  },
+  {
+    id: "chance-250",
+    text: "Kungen har uppfunnit en osynlig cykel. Du får låna den, men måste låtsas trampa hela vägen. Gå 10 steg framåt.",
+    effect: moveForward(10),
+  },
 ];

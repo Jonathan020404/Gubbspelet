@@ -1,6 +1,13 @@
 export interface Player {
   id: string;
   name: string;
+  avatar?: string;
+}
+
+export interface PendingDebt {
+  playerId: string;
+  amount: number;
+  recipientId: string | null;
 }
 
 export type PropertyId =
@@ -62,6 +69,7 @@ export interface HospitalStay {
 export interface GamePlayer {
   id: string;
   name: string;
+  avatar?: string;
   isIPhone: boolean;
   money: number;
   tileId: string;
@@ -79,6 +87,7 @@ export type GamePhase =
   | "moving"
   | "purchase"
   | "chance"
+  | "debt"
   | "finished";
 
 export interface PurchaseOffer {
@@ -826,6 +835,7 @@ export interface GameState {
   moneyPerRollRewards: MoneyPerRollReward[];
   activeLotteryCard: LotteryCard | null;
   lotteryDrawVersion: number;
+  pendingDebt: PendingDebt | null;
 }
 
 export interface Room {

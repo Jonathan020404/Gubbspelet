@@ -29,6 +29,7 @@ interface Player {
   id: string;
   name: string;
   isIPhone: boolean;
+  avatar?: string;
 }
 
 interface Room {
@@ -60,6 +61,23 @@ app.get("/", (_req, res) => {
   res.send("Gubbspelet server is running!");
 });
 
+// Allow only small PNG, JPEG or WebP image data.
+// SVG is deliberately not accepted.
+function validateAvatar(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  if (value.length > 60_000) {
+    return undefined;
+  }
+
+  const validImage =
+    /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value);
+
+  return validImage ? value : undefined;
+}
+
 io.on("connection", (socket) => {
   console.log("Player connected:", socket.id);
 
@@ -69,11 +87,24 @@ io.on("connection", (socket) => {
   const isIPhone = /\biPhone\b/i.test(userAgent);
 
   // Create a new game room
-  socket.on("createRoom", (name: unknown) => {
+
+  socket.on("createRoom", (data: unknown) => {
+    if (!data || typeof data !== "object") {
+      socket.emit("roomError", "Ogiltiga spelaruppgifter.");
+      return;
+    }
+
+    const { name, avatar } = data as {
+      name?: unknown;
+      avatar?: unknown;
+    };
+
     if (typeof name !== "string" || !name.trim()) {
       socket.emit("roomError", "Ange ditt namn.");
       return;
     }
+
+    const safeAvatar = validateAvatar(avatar);
 
     if (socket.data.roomCode) {
       socket.emit("roomError", "Du är redan i ett rum.");
@@ -85,11 +116,13 @@ io.on("connection", (socket) => {
     const room: Room = {
       code,
       hostId: socket.id,
+
       players: [
         {
           id: socket.id,
           name: name.trim().slice(0, 30),
           isIPhone,
+          avatar: safeAvatar,
         },
       ],
     };
@@ -109,10 +142,13 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const { name, code } = data as {
+    const { name, code, avatar } = data as {
       name?: unknown;
       code?: unknown;
+      avatar?: unknown;
     };
+
+    const safeAvatar = validateAvatar(avatar);
 
     if (typeof name !== "string" || !name.trim() || typeof code !== "string") {
       socket.emit("roomError", "Ange namn och rumskod.");
@@ -146,6 +182,7 @@ io.on("connection", (socket) => {
       id: socket.id,
       name: name.trim().slice(0, 30),
       isIPhone,
+      avatar: safeAvatar,
     });
 
     socket.join(roomCode);
@@ -201,7 +238,14 @@ io.on("connection", (socket) => {
 
     if (!player) return;
 
-    // Tell everyone the dice result and lock the turn.
+    // Announce the dice result to EVERY player
+    // in the room, including the person who rolled.
+    io.to(code).emit("diceRolled", {
+      playerName: player.name,
+      dice: movement.dice,
+    });
+
+    // Broadcast the updated game state.
     io.to(code).emit("roomUpdated", room);
 
     let stepIndex = 0;
@@ -265,8 +309,8 @@ io.on("connection", (socket) => {
       setTimeout(playNextStep, delay);
     };
 
-    // Give everyone a moment to see the dice result.
-    setTimeout(playNextStep, MOVE_DELAY);
+    // Show the dice result before movement starts.
+    setTimeout(playNextStep, 1200);
   });
 
   const groupTimers = new WeakMap<GameState, ReturnType<typeof setTimeout>>();

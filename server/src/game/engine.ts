@@ -29,6 +29,7 @@ export type GamePhase =
   | "moving"
   | "purchase"
   | "chance"
+  | "debt"
   | "finished";
 
 export interface PlayerLoan {
@@ -47,6 +48,7 @@ export interface HospitalStay {
 export interface GamePlayer {
   id: string;
   name: string;
+  avatar?: string;
   isIPhone: boolean;
 
   money: number;
@@ -136,6 +138,12 @@ export interface MoneyPerRollReward {
   untilPropertyId: PropertyId;
 }
 
+export interface PendingDebt {
+  playerId: string;
+  amount: number;
+  recipientId: string | null;
+}
+
 export interface GameState {
   board: Tile[];
   players: GamePlayer[];
@@ -157,6 +165,7 @@ export interface GameState {
   moneyPerRollRewards: MoneyPerRollReward[];
   activeLotteryCard: LotteryCard | null;
   lotteryDrawVersion: number;
+  pendingDebt: PendingDebt | null;
 }
 
 const PLAYER_COLORS = ["#E74C3C", "#3498DB", "#F1C40F", "#2ECC71"];
@@ -200,6 +209,12 @@ type ResolutionTask =
   | {
       type: "teleportSwapChoice";
       playerId: string;
+    }
+  | {
+      type: "debtPayment";
+      playerId: string;
+      amount: number;
+      recipientId: string | null;
     };
 
 const resolutionQueues = new WeakMap<GameState, ResolutionTask[]>();
@@ -470,7 +485,7 @@ function resolveLotteryPropertyLoss(
 }
 
 function resumeResolution(game: GameState): void {
-  if (game.winnerId) {
+  if (game.winnerId || game.pendingDebt) {
     return;
   }
 
@@ -514,6 +529,11 @@ function resumeResolution(game: GameState): void {
     // ------------------------------------
 
     switch (task.type) {
+      case "debtPayment": {
+        requestPayment(game, player, task.amount, task.recipientId);
+        break;
+      }
+
       case "teleportSwapChoice": {
         const opponents = game.players.filter(
           (other) => !other.eliminated && other.id !== player.id,
@@ -656,6 +676,7 @@ export function createGame(
   players: {
     id: string;
     name: string;
+    avatar?: string;
     isIPhone?: boolean;
   }[],
   chanceCards: ChanceCard[] = CHANCE_CARDS,
@@ -667,7 +688,7 @@ export function createGame(
     players: players.map((player, index) => ({
       id: player.id,
       name: player.name,
-
+      avatar: player.avatar,
       // NEW: Remember the player's device.
       isIPhone: player.isIPhone ?? false,
 
@@ -701,6 +722,7 @@ export function createGame(
     message: "Spelet har börjat!",
     activeLotteryCard: null,
     lotteryDrawVersion: 0,
+    pendingDebt: null,
   };
 
   chanceDeckSources.set(game, chanceCards);
@@ -905,6 +927,8 @@ function finishGame(game: GameState, winnerId: string) {
   game.phase = "finished";
   game.purchaseOffer = null;
   game.chanceDraw = null;
+  game.pendingDebt = null;
+  debtContinuations.delete(game);
   resolutionQueues.delete(game);
   groupMovements.delete(game);
 
@@ -1019,6 +1043,9 @@ function blockClosedFacility(
 }
 
 function endTurn(game: GameState): void {
+  if (game.pendingDebt) {
+    return;
+  }
   game.purchaseOffer = null;
   game.chanceDraw = null;
 
@@ -1144,28 +1171,170 @@ function createPurchaseOffer(
   game.message = landingPlayer.name + " får köpa " + property.name + ".";
 }
 
+type DebtContinuation = () => void;
+
+const debtContinuations = new WeakMap<GameState, DebtContinuation>();
+
+function hasSellableProperties(game: GameState, playerId: string): boolean {
+  return (Object.keys(game.ownership) as PropertyId[]).some(
+    (id) => game.ownership[id] === playerId,
+  );
+}
+
+function transferPayment(
+  game: GameState,
+  payer: GamePlayer,
+  amount: number,
+  recipientId: string | null,
+): number {
+  const recipient = recipientId
+    ? getActivePlayer(game, recipientId)
+    : undefined;
+
+  const paid = Math.min(Math.max(0, payer.money), Math.max(0, amount));
+
+  payer.money -= paid;
+
+  if (recipient && recipient.id !== payer.id) {
+    recipient.money += paid;
+  }
+
+  game.message =
+    payer.name +
+    " betalade " +
+    paid.toLocaleString("sv-SE") +
+    " kr till " +
+    (recipient?.name ?? "Banken") +
+    ".";
+
+  if (payer.money <= 0 && !payer.eliminated) {
+    eliminatePlayer(game, payer);
+  }
+
+  return paid;
+}
+
+function requestPayment(
+  game: GameState,
+  payer: GamePlayer,
+  amount: number,
+  recipientId: string | null,
+  afterPayment?: DebtContinuation,
+): boolean {
+  if (payer.eliminated || game.winnerId) {
+    return true;
+  }
+
+  const debtAmount = Math.max(0, amount);
+
+  if (debtAmount === 0) {
+    afterPayment?.();
+    return true;
+  }
+
+  // Not enough cash, but owns Aktiebrev.
+  // Give the player a chance to sell them.
+  if (payer.money < debtAmount && hasSellableProperties(game, payer.id)) {
+    game.pendingDebt = {
+      playerId: payer.id,
+      amount: debtAmount,
+      recipientId,
+    };
+
+    game.phase = "debt";
+
+    if (afterPayment) {
+      debtContinuations.set(game, afterPayment);
+    } else {
+      debtContinuations.delete(game);
+    }
+
+    game.message =
+      payer.name +
+      " måste betala " +
+      debtAmount.toLocaleString("sv-SE") +
+      " kr men har inte tillräckligt med pengar. " +
+      "Spelaren får sälja aktiebrev.";
+
+    return false;
+  }
+
+  // Enough money, or no Aktiebrev left to sell.
+  // In the latter case, existing bankruptcy
+  // rules apply after paying available cash.
+  transferPayment(game, payer, debtAmount, recipientId);
+  afterPayment?.();
+
+  return true;
+}
+
+function resolvePendingDebt(game: GameState): void {
+  const debt = game.pendingDebt;
+
+  if (!debt) return;
+
+  const payer = getActivePlayer(game, debt.playerId);
+
+  if (!payer) {
+    game.pendingDebt = null;
+    debtContinuations.delete(game);
+    game.phase = "rolling";
+    resumeResolution(game);
+    return;
+  }
+
+  // Continue selling while properties remain.
+  if (payer.money < debt.amount && hasSellableProperties(game, payer.id)) {
+    return;
+  }
+
+  // The debt can now be settled, or the player
+  // has run out of assets and goes bankrupt.
+  const continuation = debtContinuations.get(game);
+
+  debtContinuations.delete(game);
+  game.pendingDebt = null;
+  game.phase = "rolling";
+
+  transferPayment(game, payer, debt.amount, debt.recipientId);
+
+  if (!game.winnerId) {
+    continuation?.();
+  }
+
+  // A continuation might open a choice popup.
+  // Don't close it by resuming prematurely.
+  if (!game.winnerId && game.phase === "rolling") {
+    resumeResolution(game);
+  }
+}
+
 export function sellProperty(
   game: GameState,
   playerId: string,
   propertyId: PropertyId,
 ): boolean {
-  // Selling is only allowed before a dice roll.
-  if (game.phase !== "rolling" || game.winnerId) {
+  if (game.winnerId) {
+    return false;
+  }
+
+  const player = getActivePlayer(game, playerId);
+
+  if (!player) {
     return false;
   }
 
   const currentPlayer = game.players[game.turnIndex];
 
-  // Only the player whose turn it is can sell.
-  if (
-    !currentPlayer ||
-    currentPlayer.id !== playerId ||
-    currentPlayer.eliminated
-  ) {
+  const normalSale = game.phase === "rolling" && currentPlayer?.id === playerId;
+
+  const debtSale =
+    game.phase === "debt" && game.pendingDebt?.playerId === playerId;
+
+  if (!normalSale && !debtSale) {
     return false;
   }
 
-  // The seller must own this Aktiebrev.
   if (game.ownership[propertyId] !== playerId) {
     return false;
   }
@@ -1176,22 +1345,27 @@ export function sellProperty(
     return false;
   }
 
-  // Always 50% of the normal listed purchase price.
   const sellPrice = Math.floor(property.price * 0.5);
 
   // Return the Aktiebrev to Banken.
   delete game.ownership[propertyId];
 
-  // Give the money to the seller.
-  currentPlayer.money += sellPrice;
+  // Receive 50% of the normal purchase price.
+  player.money += sellPrice;
 
   game.message =
-    currentPlayer.name +
+    player.name +
     " sålde " +
     property.name +
     " till Banken för " +
     sellPrice.toLocaleString("sv-SE") +
     " kr.";
+
+  // The sale might have raised enough money
+  // to pay an outstanding debt.
+  if (debtSale) {
+    resolvePendingDebt(game);
+  }
 
   return true;
 }
@@ -1370,7 +1544,7 @@ function resolveProperty(
     return;
   }
 
-  // No rent when you own it yourself.
+  // You never pay rent to yourself.
   if (ownerId === player.id) {
     game.message =
       player.name + " landade på sitt eget aktiebrev: " + property.name + ".";
@@ -1386,7 +1560,7 @@ function resolveProperty(
     return;
   }
 
-  // Normal rent, or a special rent amount.
+  // Normal rent or a special rent amount.
   let fee = feeOverride ?? property.fee;
 
   const lotteryEffect = game.activeLotteryCard?.effect;
@@ -1399,96 +1573,71 @@ function resolveProperty(
   // ------------------------------------
   // LOTTERI 017 — EVERYONE PAYS RENT
   // ------------------------------------
+
   if (lotteryEffect?.type === "everyonePaysRent") {
     const payers = game.players.filter(
       (target) => !target.eliminated && target.id !== owner.id,
     );
 
-    let totalReceived = 0;
-
-    for (const payer of payers) {
-      if (game.winnerId) {
-        break;
-      }
-      const amountPaid = Math.min(Math.max(0, payer.money), fee);
-
-      payer.money -= amountPaid;
-      owner.money += amountPaid;
-      totalReceived += amountPaid;
-
-      // Preserve normal bankruptcy rules.
-      if (payer.money <= 0) {
-        eliminatePlayer(game, payer);
-      }
-    }
+    // Each payment is handled separately.
+    // The game pauses if somebody needs
+    // to sell Aktiebrev.
+    prependTasks(
+      game,
+      ...payers.map((payer) => ({
+        type: "debtPayment" as const,
+        playerId: payer.id,
+        amount: fee,
+        recipientId: owner.id,
+      })),
+    );
 
     game.message =
-      "Alla andra spelare betalade hyra till " +
+      "Alla andra spelare ska betala hyra till " +
       owner.name +
       " för " +
       property.name +
-      ". Totalt inkasserade ägaren " +
-      totalReceived.toLocaleString("sv-SE") +
-      " kr.";
+      ".";
 
-    // IMPORTANT: Don't also charge the
-    // landing player through normal rent.
+    // Do not charge the landing player twice.
     return;
   }
 
   // ------------------------------------
   // NORMAL RENT PAYMENT
   // ------------------------------------
-  const amountPaid = Math.min(Math.max(0, player.money), fee);
 
-  player.money -= amountPaid;
-  owner.money += amountPaid;
+  requestPayment(game, player, fee, owner.id, () => {
+    // Lotteri 024:
+    // The owner draws Frågekort after
+    // receiving rent.
+    const rentEffect = game.activeLotteryCard?.effect;
 
-  game.message =
-    player.name +
-    " betalade " +
-    amountPaid.toLocaleString("sv-SE") +
-    " kr till " +
-    owner.name +
-    " för " +
-    property.name +
-    ".";
+    if (
+      rentEffect?.type === "drawChanceWhenReceivingRent" &&
+      !owner.eliminated
+    ) {
+      prependTasks(game, {
+        type: "drawChance",
+        playerId: owner.id,
+        remaining: rentEffect.amount,
+        total: rentEffect.amount,
+      });
 
-  // Lotteri 024:
-  // The property owner draws one Frågekort
-  // whenever another player pays them rent.
-  const rentLotteryEffect = game.activeLotteryCard?.effect;
+      game.message +=
+        " " + owner.name + " får ta ett frågekort tack vare Lotteri 024!";
+    }
 
-  if (
-    amountPaid > 0 &&
-    rentLotteryEffect?.type === "drawChanceWhenReceivingRent"
-  ) {
-    prependTasks(game, {
-      type: "drawChance",
-      playerId: owner.id,
-      remaining: rentLotteryEffect.amount,
-      total: rentLotteryEffect.amount,
-    });
-
-    game.message +=
-      " " + owner.name + " får ta ett frågekort tack vare Lotteri 024!";
-  }
-
-  // Keep our normal bankruptcy rules.
-  if (player.money <= 0) {
-    eliminatePlayer(game, player);
-    return;
-  }
-
-  // Lotteri 005:
-  // Paying rent also requires giving
-  // one Aktiebrev to the rent recipient.
-  if (
-    amountPaid > 0 &&
-    game.activeLotteryCard?.effect.type === "givePropertyWhenPayingRent"
-  ) {
-    offerRentPropertyChoice(game, player, owner);
-  }
+    // Lotteri 005:
+    // A surviving player must also give
+    // an Aktiebrev to the rent recipient.
+    if (
+      !player.eliminated &&
+      game.activeLotteryCard?.effect.type === "givePropertyWhenPayingRent"
+    ) {
+      offerRentPropertyChoice(game, player, owner);
+    }
+  });
 }
 
 // ------------------------------------
@@ -2428,14 +2577,18 @@ function applyLotteryRuleOnDice(
       const tax = totalPips * effect.amountPerPip;
 
       // Don't let the cash balance become negative.
-      const amountPaid = Math.min(Math.max(0, player.money), tax);
 
-      player.money -= amountPaid;
+      prependTasks(game, {
+        type: "debtPayment",
+        playerId: player.id,
+        amount: tax,
+        recipientId: null,
+      });
 
       game.message =
         player.name +
-        " betalade " +
-        amountPaid.toLocaleString("sv-SE") +
+        " ska betala " +
+        tax.toLocaleString("sv-SE") +
         " kr i skatt (" +
         totalPips +
         " prickar).";
@@ -3123,10 +3276,9 @@ function changeChanceBankMoney(
   player: GamePlayer,
   amount: number,
 ): void {
-  // Positive = receive money.
-  // Negative = pay money.
   const adjustedAmount = amount * getChanceMoneyMultiplier(game);
 
+  // Positive = receive money.
   if (adjustedAmount >= 0) {
     player.money += adjustedAmount;
 
@@ -3135,21 +3287,13 @@ function changeChanceBankMoney(
       " inkasserade " +
       adjustedAmount.toLocaleString("sv-SE") +
       " kr från Banken.";
-  } else {
-    const payment = Math.min(Math.max(0, player.money), -adjustedAmount);
 
-    player.money -= payment;
-
-    game.message =
-      player.name +
-      " betalade " +
-      payment.toLocaleString("sv-SE") +
-      " kr till Banken.";
-
-    if (player.money <= 0) {
-      eliminatePlayer(game, player);
-    }
+    return;
   }
+
+  // Negative = pay Banken.
+  // The player can sell Aktiebrev first.
+  requestPayment(game, player, -adjustedAmount, null);
 }
 
 // Apply an individual card effect.
@@ -6430,22 +6574,20 @@ function applyChanceEffect(
         (target) => target.id !== player.id,
       );
 
-      // Apply the payment to every opponent
-      // before checking whether the game is won.
-      for (const target of opponents) {
-        const amountPaid = Math.min(target.money, effect.amount);
-
-        target.money -= amountPaid;
-
-        if (target.money <= 0) {
-          eliminatePlayer(game, target);
-        }
-      }
+      prependTasks(
+        game,
+        ...opponents.map((target) => ({
+          type: "debtPayment" as const,
+          playerId: target.id,
+          amount: effect.amount,
+          recipientId: null,
+        })),
+      );
 
       game.message =
-        "Alla andra spelare betalade upp till " +
+        "Alla andra spelare ska betala " +
         effect.amount.toLocaleString("sv-SE") +
-        " kr var till Banken.";
+        " kr till Banken.";
 
       break;
     }
@@ -6616,28 +6758,31 @@ function applyChanceEffect(
 
       const amount = effect.amount * getChanceMoneyMultiplier(game);
 
-      for (const target of players) {
-        if (amount >= 0) {
+      if (amount >= 0) {
+        for (const target of players) {
           target.money += amount;
-        } else {
-          const payment = Math.min(Math.max(0, target.money), -amount);
-
-          target.money -= payment;
-
-          if (target.money <= 0) {
-            eliminatePlayer(game, target);
-          }
         }
-      }
 
-      game.message =
-        amount >= 0
-          ? "Alla spelare inkasserade " +
-            amount.toLocaleString("sv-SE") +
-            " kr var."
-          : "Alla spelare betalade upp till " +
-            (-amount).toLocaleString("sv-SE") +
-            " kr var.";
+        game.message =
+          "Alla spelare inkasserade " +
+          amount.toLocaleString("sv-SE") +
+          " kr var.";
+      } else {
+        prependTasks(
+          game,
+          ...players.map((target) => ({
+            type: "debtPayment" as const,
+            playerId: target.id,
+            amount: -amount,
+            recipientId: null,
+          })),
+        );
+
+        game.message =
+          "Alla spelare ska betala " +
+          (-amount).toLocaleString("sv-SE") +
+          " kr var till Banken.";
+      }
 
       break;
     }
@@ -6672,31 +6817,11 @@ function applyChanceEffect(
     case "payPlayer": {
       const target = getActivePlayer(game, effect.targetPlayerId);
 
-      // Only another active player can receive
-      // the payment.
       if (!target || target.id === player.id) {
         break;
       }
 
-      // A player cannot pay more money
-      // than they currently have.
-      const amountPaid = Math.min(player.money, effect.amount);
-
-      // Transfer the money.
-      player.money -= amountPaid;
-      target.money += amountPaid;
-
-      game.message =
-        player.name +
-        " betalade " +
-        amountPaid.toLocaleString("sv-SE") +
-        " kr till " +
-        target.name +
-        ".";
-
-      if (player.money <= 0) {
-        eliminatePlayer(game, player);
-      }
+      requestPayment(game, player, effect.amount, target.id);
 
       break;
     }
@@ -7012,7 +7137,7 @@ function payPropertyOwnerFromCard(
 
   const ownerId = game.ownership[propertyId];
 
-  // Banken owns the Aktiebrev.
+  // Banken owns this Aktiebrev.
   if (!ownerId) {
     game.message =
       "Banken äger " +
@@ -7024,7 +7149,7 @@ function payPropertyOwnerFromCard(
     return;
   }
 
-  // The drawing player owns it themselves.
+  // The player owns this Aktiebrev.
   if (ownerId === player.id) {
     game.message =
       player.name +
@@ -7041,25 +7166,10 @@ function payPropertyOwnerFromCard(
     return;
   }
 
-  // The player cannot pay more than they have.
-  const paid = Math.min(player.money, amount);
+  // The shared payment system will pause
+  // if the player needs to sell Aktiebrev.
 
-  player.money -= paid;
-  owner.money += paid;
-
-  game.message =
-    player.name +
-    " betalade " +
-    paid.toLocaleString("sv-SE") +
-    " kr till " +
-    owner.name +
-    " för " +
-    property.name +
-    ".";
-
-  if (player.money <= 0) {
-    eliminatePlayer(game, player);
-  }
+  requestPayment(game, player, amount, owner.id);
 }
 
 // The player confirms that the card has been read.
@@ -8500,17 +8610,14 @@ export function completeRoll(game: GameState, movement: MovementPlan): boolean {
       const owner = ownerId ? getActivePlayer(game, ownerId) : undefined;
 
       // Banken cannot pay a penalty to itself.
+
       if (owner) {
-        const payment = Math.min(
-          Math.max(0, owner.money),
-          effect.fallbackPenalty,
-        );
-
-        owner.money -= payment;
-
-        if (owner.money <= 0) {
-          eliminatePlayer(game, owner);
-        }
+        prependTasks(game, {
+          type: "debtPayment",
+          playerId: owner.id,
+          amount: effect.fallbackPenalty,
+          recipientId: null,
+        });
       }
     }
   }
