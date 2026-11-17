@@ -25,9 +25,10 @@ const httpServer = createServer(app);
   },
 });*/
 
-const allowedOrigins = ["http://localhost:5173", process.env.CLIENT_URL].filter(
-  (origin): origin is string => Boolean(origin),
-);
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://gubbspelet-client.onrender.com",
+];
 
 const io = new Server(httpServer, {
   cors: {
