@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { socket } from "./socket";
 import type { Room } from "./types";
 import "./App.css";
 import GameScreen from "./components/GameScreen";
+import LotteryCardModal from "./components/LotteryCardModal";
+import type { LotteryCard } from "./types";
 
 type Screen = "menu" | "create" | "join" | "lobby";
 
@@ -13,6 +15,30 @@ function App() {
   const [roomCode, setRoomCode] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
   const [error, setError] = useState("");
+
+  const [lotteryPopup, setLotteryPopup] = useState<LotteryCard | null>(null);
+
+  const lastSeenLotteryVersion = useRef<number | null>(null);
+
+  useEffect(() => {
+    const game = room?.game;
+
+    if (!game) {
+      return;
+    }
+
+    const version = game.lotteryDrawVersion;
+
+    if (lastSeenLotteryVersion.current === version) {
+      return;
+    }
+
+    lastSeenLotteryVersion.current = version;
+
+    if (version > 0 && game.activeLotteryCard) {
+      setLotteryPopup(game.activeLotteryCard);
+    }
+  }, [room?.game?.lotteryDrawVersion, room?.game?.activeLotteryCard]);
 
   useEffect(() => {
     const onConnect = () => {
@@ -293,6 +319,9 @@ function App() {
                 socket.emit("continueChance", token, choiceIndex);
               }
             }}
+            onSellProperty={(propertyId) => {
+              socket.emit("sellProperty", propertyId);
+            }}
           />
         )}
 
@@ -303,6 +332,14 @@ function App() {
           {connected ? "Ansluten till servern" : "Inte ansluten till servern"}
         </footer>
       </div>
+
+      {/* NEW: Show the Lotteri popup to everyone */}
+      {lotteryPopup && (
+        <LotteryCardModal
+          card={lotteryPopup}
+          onClose={() => setLotteryPopup(null)}
+        />
+      )}
     </main>
   );
 }

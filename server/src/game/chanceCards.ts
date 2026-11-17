@@ -9,6 +9,15 @@ import {
 
 export type ChanceEffect =
   | {
+      type: "swapPlayerPositionsWithoutLanding";
+      targetPlayerId: string;
+    }
+  | {
+      type: "transferRentProperty";
+      propertyId: PropertyId;
+      recipientId: string;
+    }
+  | {
       type: "skipTurns";
       amount: number;
     }
@@ -1867,7 +1876,7 @@ export const CHANCE_CARDS: ChanceCard[] = [
       },
     ),
   },
-  
+
   {
     id: "chance-046",
     text: "En enarmad bandit skjuter dig i benet. Gå till sjukhuset och stanna där tills någon går på Svensk Bank, Chokladfabriken, Spelstudion, Sökmotorn eller Lotteri.",
@@ -2201,7 +2210,7 @@ export const CHANCE_CARDS: ChanceCard[] = [
   },
   {
     id: "chance-086",
-    text: "Du är sugen på choklad. Åk till Marabou och betala dubbel hyra. Gäller ej om du eller Banken äger Marabou, isåfall slå Krösus mellan bena.",
+    text: "Du är sugen på choklad. Åk till Chokladfabriken och betala dubbel hyra. Gäller ej om du eller Banken äger Chokladfabriken, isåfall slå Krösus mellan bena.",
     effect: moveToOpponentPropertyWithFee("chocolateFactory", 60_000),
   },
   {
@@ -2375,7 +2384,7 @@ export const CHANCE_CARDS: ChanceCard[] = [
   },
   {
     id: "chance-101",
-    text: "Du blir jagad av en norsk indian. Gå ett varv runt ett bord eller betala 20000 till varje spelare.",
+    text: "Du blir jagad av en norsk skidåkare. Gå ett varv runt ett bord eller betala 20000 till varje spelare.",
     effect: choose(
       {
         label: "Jag har gått ett varv runt ett bord",
@@ -2802,7 +2811,7 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-163",
     text: "En gubbe fyller år idag. Köp ett par baby-pants för 30000 till honom.",
     effect: loseMoney(30_000),
-  } 
+  },
   {
     id: "chance-164",
     text: "Du är sugen på skräpmat gå till närmaste Hamburgerrestaurang.",
@@ -2883,13 +2892,13 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-173",
     text: "Plocka ett frågekort. Om det står att man ska betala till banken, betala 2 gånger så mycket. Ska man inkassera så får du ta ett lotteri om du vill.",
     effect: drawBankModifiedChance(),
-  },
+  },*/
   {
     id: "chance-174",
     text: "Krösus somnar när han äter pannkakor. Inkassera 10000.",
     effect: gainMoney(10_000),
   },
-
+  /*
   {
     id: "chance-175",
     text: "Spelaren längst bak ska gå 7 steg framåt och spelaren längst fram ska gå 7 steg bakåt. Gäller ej om 2 eller flera personer är längst fram/bak, isåfall ta nytt frågekort.",
@@ -2952,7 +2961,8 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-184",
     text: "Gå till ett lotteri",
     effect: moveToNearestLottery(),
-  } /*
+  },
+  /*
   {
     id: "chance-185",
     text: "Slå tärningen och gå bakåt. Om du hamnar på frågekort så ska du ta 2 frågekort. Hamnar du på aktiebrev så får du ta den oavsett om banken eller en annan spelare äger den. Hamnar du på lotteri så går du 15 steg framåt utan att ta ett lotteri.",
@@ -3009,7 +3019,8 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-191",
     text: "Då råka stöta på en gubbe. Betala 30000",
     effect: loseMoney(30_000),
-  },*/ /*{
+  },
+  {
     id: "chance-192",
     text: "Du försöker klappa en söt kattunge. Slår du 1-4 så springer kattungen 30km/h ifrån dig, och du behöver stå över 1 kast och hämta andan. Slår du 5-6 så vinner Hammarby med 3-0 och du inkasserar 30000. Spelaren till vänster ska gå till sjukhuset.",
     effect: rollForEffect(
@@ -3024,7 +3035,7 @@ export const CHANCE_CARDS: ChanceCard[] = [
         effect: sequence(gainMoney(30_000), moveLeftPlayerTo(HOSPITAL_TILE_ID)),
       },
     ),
-  }
+  },
   {
     id: "chance-193",
     text: "Du sa något roligt, inkassera 9000.",
@@ -3219,7 +3230,7 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-218",
     text: "Du äter upp allas choklad på julaftonen. Betala 10000 till den som öppnade chokladasken.",
     effect: choosePlayerToPay(10_000),
-  } 
+  },
   {
     id: "chance-219",
     text: "Du ska baka lussebullar men du har inget mjöl hemma. gå till Mataffären och betala 10000.",
@@ -3243,7 +3254,7 @@ export const CHANCE_CARDS: ChanceCard[] = [
         effect: sequence(),
       },
     ),
-  } /*
+  },
   {
     id: "chance-222",
     text: "Du blir akut sugen på korv. Hoppa som en packad känguru till närmaste Möbelbutiken och köpa en hästköttsskandalskorv för 5 kr. Möbelbutiken har dock ingen växel så du får betala 5000kr.",
@@ -3334,16 +3345,16 @@ export const CHANCE_CARDS: ChanceCard[] = [
     id: "chance-234",
     text: "En glad speleman körde den kirgiziska helikoptern och knockar sig själv. Gå till sjukhuset och hälsa på honom",
     effect: moveTo(HOSPITAL_TILE_ID),
-  }, {
+  },
+  {
     id: "chance-235",
     text: "Du åker vilse i Sävedalen. Efter att ha tjatat hela dagen att du behöver diskmedel så glömmer du köpa på vägen hem. Åk tillbaka till närmaste Mataffären och betala 10000.",
     effect: sequence(moveToNearestProperty("groceryStore"), loseMoney(10_000)),
-  },
-  {
+  },*/ {
     id: "chance-236",
     text: "Du gör mer pannkakssmet än vad som får plats i bunken. Gå till Sjukhuset  ",
     effect: moveTo(HOSPITAL_TILE_ID),
-  },
+  } /*
   {
     id: "chance-237",
     text: "Du blir irriterad på att en person du aldrig träffat kallas för ”Draken”. Rid på Draken, flyg 10 steg framåt såvida du inte har druckit rakvatten  ",

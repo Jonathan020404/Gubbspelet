@@ -1,4 +1,4 @@
-import type { GameState } from "../types";
+import type { GameState, PropertyId } from "../types";
 import GameBoard from "./GameBoard";
 import "./GameScreen.css";
 import PurchaseCard from "./PurchaseCard";
@@ -8,6 +8,7 @@ import LoanStatus from "./LoanStatus";
 import HospitalStatus from "./HospitalStatus";
 import RockPaperScissorsModal from "./RockPaperScissorsModal";
 import RollMultiplierStatus from "./RollMultiplierStatus";
+import PropertyInfo from "./PropertyInfo";
 
 interface GameScreenProps {
   game: GameState;
@@ -17,6 +18,7 @@ interface GameScreenProps {
   onLeave: () => void;
   onPurchaseDecision: (decision: "buy" | "decline") => void;
   onContinueChance: (token: string, choiceIndex?: number) => void;
+  onSellProperty: (propertyId: PropertyId) => void;
 }
 
 const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
@@ -29,10 +31,17 @@ export default function GameScreen({
   onLeave,
   onPurchaseDecision,
   onContinueChance,
+  onSellProperty,
 }: GameScreenProps) {
   const currentPlayer = game.players[game.turnIndex];
 
   const isMyTurn = currentPlayer.id === playerId;
+
+  const canSellProperties =
+    isMyTurn &&
+    game.phase === "rolling" &&
+    !currentPlayer.eliminated &&
+    !game.winnerId;
 
   const winner = game.players.find((player) => player.id === game.winnerId);
 
@@ -152,17 +161,16 @@ export default function GameScreen({
                   <span className="no-properties">Inga aktiebrev</span>
                 ) : (
                   ownedProperties.map((property) => (
-                    <span
-                      className="owned-property"
+                    <PropertyInfo
                       key={property.id}
-                      title={
-                        "Avgift: " +
-                        property.fee.toLocaleString("sv-SE") +
-                        " kr"
-                      }
-                    >
-                      {property.name}
-                    </span>
+                      propertyId={property.id}
+                      name={property.name}
+                      price={property.price}
+                      fee={property.fee}
+                      ownedByMe={player.id === playerId}
+                      canSell={player.id === playerId && canSellProperties}
+                      onSell={onSellProperty}
+                    />
                   ))
                 )}
               </div>

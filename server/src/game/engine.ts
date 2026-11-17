@@ -156,6 +156,7 @@ export interface GameState {
   chanceDraw: ChanceDraw | null;
   moneyPerRollRewards: MoneyPerRollReward[];
   activeLotteryCard: LotteryCard | null;
+  lotteryDrawVersion: number;
 }
 
 const PLAYER_COLORS = ["#E74C3C", "#3498DB", "#F1C40F", "#2ECC71"];
@@ -190,6 +191,15 @@ type ResolutionTask =
   | {
       type: "restoreTurn";
       turnIndex: number;
+    }
+  | {
+      type: "lotteryPropertyLoss";
+      playerId: string;
+      fallbackAmount: number;
+    }
+  | {
+      type: "teleportSwapChoice";
+      playerId: string;
     };
 
 const resolutionQueues = new WeakMap<GameState, ResolutionTask[]>();
@@ -201,6 +211,8 @@ const activeBankModifiers = new WeakMap<GameState, BankCardModifier>();
 const oddOnlyBonusRolls = new WeakMap<GameState, string>();
 
 const pendingBankruptcies = new WeakMap<GameState, Set<string>>();
+
+const lottery022FrozenPlayers = new WeakMap<GameState, Set<string>>();
 
 function getPendingBankruptcies(game: GameState): Set<string> {
   let pending = pendingBankruptcies.get(game);
@@ -395,6 +407,68 @@ function resolveModifiedCardEffect(
   }
 }
 
+function resolveLotteryPropertyLoss(
+  game: GameState,
+  player: GamePlayer,
+  fallbackAmount: number,
+): void {
+  const ownedProperties = (Object.keys(game.ownership) as PropertyId[]).filter(
+    (propertyId) => game.ownership[propertyId] === player.id,
+  );
+
+  // No Aktiebrev: lose 30,000 kr instead.
+  if (ownedProperties.length === 0) {
+    applyChanceEffect(game, player, {
+      type: "loseMoney",
+      amount: fallbackAmount,
+    });
+
+    return;
+  }
+
+  const leftPlayer = playersInOrder(game, player.id).find(
+    (other) => other.id !== player.id,
+  );
+
+  if (!leftPlayer) {
+    return;
+  }
+
+  // Use the existing Frågekort choice UI.
+  game.chanceDraw = {
+    token: randomUUID(),
+    playerId: player.id,
+    card: {
+      id: "lottery-008-property-choice",
+      text:
+        "Lotteri 008: Du slog en 1a. " +
+        "Välj vilket aktiebrev du ska ge till " +
+        leftPlayer.name +
+        ".",
+      effect: {
+        type: "choose",
+        options: ownedProperties.map((propertyId) => ({
+          label:
+            "Ge " +
+            game.properties[propertyId].name +
+            " till " +
+            leftPlayer.name,
+          effect: {
+            type: "transferRentProperty",
+            propertyId,
+            recipientId: leftPlayer.id,
+          },
+        })),
+      },
+    },
+    remaining: 1,
+    total: 1,
+  };
+
+  game.phase = "chance";
+  game.message = player.name + " slog en 1a och måste ge bort ett aktiebrev!";
+}
+
 function resumeResolution(game: GameState): void {
   if (game.winnerId) {
     return;
@@ -440,6 +514,53 @@ function resumeResolution(game: GameState): void {
     // ------------------------------------
 
     switch (task.type) {
+      case "teleportSwapChoice": {
+        const opponents = game.players.filter(
+          (other) => !other.eliminated && other.id !== player.id,
+        );
+
+        if (opponents.length === 0) {
+          game.message = "Det finns ingen annan spelare att byta plats med.";
+          break;
+        }
+
+        game.chanceDraw = {
+          token: randomUUID(),
+          playerId: player.id,
+          card: {
+            id: "lottery-015-teleport",
+            text:
+              "Du slog en 6a! Välj en spelare att byta plats med. " +
+              "Ingen av er påverkas av rutan ni hamnar på.",
+            effect: {
+              type: "choose",
+              options: opponents.map((opponent) => ({
+                label: "Byt plats med " + opponent.name,
+                effect: {
+                  type: "swapPlayerPositionsWithoutLanding",
+                  targetPlayerId: opponent.id,
+                },
+              })),
+            },
+          },
+          remaining: 1,
+          total: 1,
+        };
+
+        game.phase = "chance";
+        game.message =
+          player.name +
+          " slog en 6a och ska välja en spelare att teleportera med!";
+
+        break;
+      }
+
+      case "lotteryPropertyLoss": {
+        resolveLotteryPropertyLoss(game, player, task.fallbackAmount);
+
+        break;
+      }
+
       case "landing": {
         resolveLanding(game, player, task.tileId, task.feeOverride);
 
@@ -579,6 +700,7 @@ export function createGame(
     winnerId: null,
     message: "Spelet har börjat!",
     activeLotteryCard: null,
+    lotteryDrawVersion: 0,
   };
 
   chanceDeckSources.set(game, chanceCards);
@@ -619,7 +741,11 @@ function getDistanceToFinish(tileId: string): number {
   return distance;
 }
 
-function calculateMovement(tileId: string, steps: number) {
+function calculateMovement(
+  tileId: string,
+  steps: number,
+  disableAlternativeRoutes: boolean = false,
+) {
   let current = getTile(tileId);
 
   const path: string[] = [];
@@ -633,8 +759,11 @@ function calculateMovement(tileId: string, steps: number) {
     let nextId = current.nextTileId;
 
     // Alternative routes only activate when
-    // starting a dice roll on Genväg or Senväg.
+    // starting on Genväg or Senväg.
+    //
+    // Lotteri 018 disables both routes.
     if (
+      !disableAlternativeRoutes &&
       step === 0 &&
       (current.type === "shortcut" || current.type === "detour") &&
       current.targetTileId
@@ -792,6 +921,17 @@ function eliminatePlayer(game: GameState, player: GamePlayer) {
   player.nextRollMultiplier = 1;
   player.nextRollBonus = 0;
 
+  // Lotteri 017 becomes invalid when
+  // only two active players remain.
+  const activePlayers = game.players.filter((p) => !p.eliminated);
+
+  if (
+    activePlayers.length === 2 &&
+    game.activeLotteryCard?.effect.type === "everyonePaysRent"
+  ) {
+    drawLotteryCard(game, activePlayers[0].id);
+  }
+
   game.moneyPerRollRewards = game.moneyPerRollRewards.filter(
     (reward) => reward.playerId !== player.id,
   );
@@ -820,6 +960,63 @@ function checkForWinner(game: GameState): boolean {
 // ------------------------------------
 // TURN MANAGEMENT
 // ------------------------------------
+
+function isFrozenByLottery022(game: GameState, playerId: string): boolean {
+  return lottery022FrozenPlayers.get(game)?.has(playerId) ?? false;
+}
+
+function blockClosedFacility(
+  game: GameState,
+  player: GamePlayer,
+  destinationTileId: string,
+): boolean {
+  if (game.activeLotteryCard?.effect.type !== "closeHospitalAndRepairShop") {
+    return false;
+  }
+
+  const destination = getTile(destinationTileId);
+
+  if (destination.type !== "hospital" && destination.type !== "repairShop") {
+    return false;
+  }
+
+  let frozen = lottery022FrozenPlayers.get(game);
+
+  if (!frozen) {
+    frozen = new Set<string>();
+    lottery022FrozenPlayers.set(game, frozen);
+  }
+
+  frozen.add(player.id);
+
+  game.message =
+    player.name +
+    " skulle till " +
+    destination.name +
+    ", men det är nedstängt! " +
+    "Spelaren står kvar och får inte slå igen " +
+    "förrän ett nytt Lotteri dras.";
+
+  // Check whether every active player is frozen.
+  const activePlayers = game.players.filter((p) => !p.eliminated);
+
+  const everyoneFrozen =
+    activePlayers.length > 0 && activePlayers.every((p) => frozen.has(p.id));
+
+  if (everyoneFrozen) {
+    for (const target of activePlayers) {
+      target.tileId = START_TILE_ID;
+    }
+
+    // Release everyone before drawing
+    // the replacement Lotteri.
+    lottery022FrozenPlayers.delete(game);
+
+    drawLotteryCard(game, player.id);
+  }
+
+  return true;
+}
 
 function endTurn(game: GameState): void {
   game.purchaseOffer = null;
@@ -862,6 +1059,18 @@ function endTurn(game: GameState): void {
       continue;
     }
 
+    // Lotteri 022: this player is frozen
+    // until the next Lotteri is drawn.
+    if (isFrozenByLottery022(game, player.id)) {
+      game.message +=
+        " " +
+        player.name +
+        " står över sitt kast eftersom " +
+        "Sjukhuset och Bilverkstan är nedstängda.";
+
+      continue;
+    }
+
     if (getPendingBankruptcies(game).has(player.id)) {
       continue;
     }
@@ -892,6 +1101,25 @@ function endTurn(game: GameState): void {
 // PURCHASE OFFERS
 // ------------------------------------
 
+function getBankPurchasePrice(
+  game: GameState,
+  propertyId: PropertyId,
+  afterDecline = false,
+): number {
+  const property = game.properties[propertyId];
+
+  const normalMultiplier = afterDecline ? 0.5 : 1;
+
+  const lotteryEffect = game.activeLotteryCard?.effect;
+
+  const lotteryMultiplier =
+    lotteryEffect?.type === "discountBankProperties"
+      ? lotteryEffect.multiplier
+      : 1;
+
+  return Math.ceil(property.price * normalMultiplier * lotteryMultiplier);
+}
+
 function createPurchaseOffer(
   game: GameState,
   propertyId: PropertyId,
@@ -908,12 +1136,64 @@ function createPurchaseOffer(
   game.purchaseOffer = {
     propertyId,
     playerId: landingPlayer.id,
-    price: property.price,
+    price: getBankPurchasePrice(game, propertyId),
     eligiblePlayerIds,
     offerIndex: 0,
   };
 
   game.message = landingPlayer.name + " får köpa " + property.name + ".";
+}
+
+export function sellProperty(
+  game: GameState,
+  playerId: string,
+  propertyId: PropertyId,
+): boolean {
+  // Selling is only allowed before a dice roll.
+  if (game.phase !== "rolling" || game.winnerId) {
+    return false;
+  }
+
+  const currentPlayer = game.players[game.turnIndex];
+
+  // Only the player whose turn it is can sell.
+  if (
+    !currentPlayer ||
+    currentPlayer.id !== playerId ||
+    currentPlayer.eliminated
+  ) {
+    return false;
+  }
+
+  // The seller must own this Aktiebrev.
+  if (game.ownership[propertyId] !== playerId) {
+    return false;
+  }
+
+  const property = game.properties[propertyId];
+
+  if (!property) {
+    return false;
+  }
+
+  // Always 50% of the normal listed purchase price.
+  const sellPrice = Math.floor(property.price * 0.5);
+
+  // Return the Aktiebrev to Banken.
+  delete game.ownership[propertyId];
+
+  // Give the money to the seller.
+  currentPlayer.money += sellPrice;
+
+  game.message =
+    currentPlayer.name +
+    " sålde " +
+    property.name +
+    " till Banken för " +
+    sellPrice.toLocaleString("sv-SE") +
+    " kr.";
+
+  return true;
 }
 
 export function respondToPurchase(
@@ -1003,7 +1283,7 @@ export function respondToPurchase(
   offer.offerIndex = nextIndex;
   offer.playerId = offer.eligiblePlayerIds[nextIndex];
 
-  offer.price = property.price / 2;
+  offer.price = getBankPurchasePrice(game, offer.propertyId, true);
 
   const nextPlayer = game.players.find((p) => p.id === offer.playerId);
 
@@ -1013,7 +1293,9 @@ export function respondToPurchase(
     (nextPlayer?.name ?? "Nästa spelare") +
     " får köpa " +
     property.name +
-    " för halva priset.";
+    " för " +
+    offer.price.toLocaleString("sv-SE") +
+    " kr.";
 
   return true;
 }
@@ -1022,6 +1304,57 @@ export function respondToPurchase(
 // LANDING ON AN AKTIEBREV
 // ------------------------------------
 
+function offerRentPropertyChoice(
+  game: GameState,
+  payer: GamePlayer,
+  recipient: GamePlayer,
+): void {
+  const ownedProperties = (Object.keys(game.ownership) as PropertyId[]).filter(
+    (propertyId) => game.ownership[propertyId] === payer.id,
+  );
+
+  // No Aktiebrev: nothing extra to give.
+  if (ownedProperties.length === 0) {
+    return;
+  }
+
+  // Reuse our existing choice interface.
+  game.chanceDraw = {
+    token: randomUUID(),
+    playerId: payer.id,
+    card: {
+      id: "lottery-005-property-choice",
+      text:
+        "Lotteri 005: Du har betalat hyra. " +
+        "Välj vilket aktiebrev du ska ge till " +
+        recipient.name +
+        ".",
+      effect: {
+        type: "choose",
+        options: ownedProperties.map((propertyId) => ({
+          label:
+            "Ge " +
+            game.properties[propertyId].name +
+            " till " +
+            recipient.name,
+          effect: {
+            type: "transferRentProperty",
+            propertyId,
+            recipientId: recipient.id,
+          },
+        })),
+      },
+    },
+    remaining: 1,
+    total: 1,
+  };
+
+  game.phase = "chance";
+
+  game.message =
+    payer.name + " ska välja ett aktiebrev att ge till " + recipient.name + "!";
+}
+
 function resolveProperty(
   game: GameState,
   player: GamePlayer,
@@ -1029,17 +1362,15 @@ function resolveProperty(
   feeOverride?: number,
 ) {
   const property = game.properties[propertyId];
-
   const ownerId = game.ownership[propertyId];
 
-  // Banken owns the property if it is unowned.
+  // Banken owns the property.
   if (!ownerId) {
     createPurchaseOffer(game, propertyId, player);
-
     return;
   }
 
-  // You never pay yourself.
+  // No rent when you own it yourself.
   if (ownerId === player.id) {
     game.message =
       player.name + " landade på sitt eget aktiebrev: " + property.name + ".";
@@ -1051,17 +1382,64 @@ function resolveProperty(
 
   if (!owner) {
     delete game.ownership[propertyId];
-
     createPurchaseOffer(game, propertyId, player);
-
     return;
   }
 
-  // Use a special card fee if one was provided.
-  // Otherwise use the normal property rent.
-  const fee = feeOverride ?? property.fee;
+  // Normal rent, or a special rent amount.
+  let fee = feeOverride ?? property.fee;
 
-  const amountPaid = Math.min(player.money, fee);
+  const lotteryEffect = game.activeLotteryCard?.effect;
+
+  // Lotteri 006: double rent.
+  if (lotteryEffect?.type === "multiplyPropertyRent") {
+    fee *= lotteryEffect.multiplier;
+  }
+
+  // ------------------------------------
+  // LOTTERI 017 — EVERYONE PAYS RENT
+  // ------------------------------------
+  if (lotteryEffect?.type === "everyonePaysRent") {
+    const payers = game.players.filter(
+      (target) => !target.eliminated && target.id !== owner.id,
+    );
+
+    let totalReceived = 0;
+
+    for (const payer of payers) {
+      if (game.winnerId) {
+        break;
+      }
+      const amountPaid = Math.min(Math.max(0, payer.money), fee);
+
+      payer.money -= amountPaid;
+      owner.money += amountPaid;
+      totalReceived += amountPaid;
+
+      // Preserve normal bankruptcy rules.
+      if (payer.money <= 0) {
+        eliminatePlayer(game, payer);
+      }
+    }
+
+    game.message =
+      "Alla andra spelare betalade hyra till " +
+      owner.name +
+      " för " +
+      property.name +
+      ". Totalt inkasserade ägaren " +
+      totalReceived.toLocaleString("sv-SE") +
+      " kr.";
+
+    // IMPORTANT: Don't also charge the
+    // landing player through normal rent.
+    return;
+  }
+
+  // ------------------------------------
+  // NORMAL RENT PAYMENT
+  // ------------------------------------
+  const amountPaid = Math.min(Math.max(0, player.money), fee);
 
   player.money -= amountPaid;
   owner.money += amountPaid;
@@ -1076,8 +1454,40 @@ function resolveProperty(
     property.name +
     ".";
 
+  // Lotteri 024:
+  // The property owner draws one Frågekort
+  // whenever another player pays them rent.
+  const rentLotteryEffect = game.activeLotteryCard?.effect;
+
+  if (
+    amountPaid > 0 &&
+    rentLotteryEffect?.type === "drawChanceWhenReceivingRent"
+  ) {
+    prependTasks(game, {
+      type: "drawChance",
+      playerId: owner.id,
+      remaining: rentLotteryEffect.amount,
+      total: rentLotteryEffect.amount,
+    });
+
+    game.message +=
+      " " + owner.name + " får ta ett frågekort tack vare Lotteri 024!";
+  }
+
+  // Keep our normal bankruptcy rules.
   if (player.money <= 0) {
     eliminatePlayer(game, player);
+    return;
+  }
+
+  // Lotteri 005:
+  // Paying rent also requires giving
+  // one Aktiebrev to the rent recipient.
+  if (
+    amountPaid > 0 &&
+    game.activeLotteryCard?.effect.type === "givePropertyWhenPayingRent"
+  ) {
+    offerRentPropertyChoice(game, player, owner);
   }
 }
 
@@ -1688,6 +2098,13 @@ function showChanceCard(
   total: number,
   checkThemes: boolean = false,
 ) {
+  // Lotteri 012: Frågekort are disabled.
+  if (game.activeLotteryCard?.effect.type === "disableChanceCards") {
+    game.message = "Alla frågekort är ogiltiga på grund av Lotteri 012!";
+
+    return;
+  }
+
   // Draw ONE card from the shuffled deck.
   const card = drawChanceCard(game);
 
@@ -1760,29 +2177,80 @@ export function drawLotteryCard(game: GameState, playerId: string): void {
     return;
   }
 
-  // Refill and reshuffle when the deck is empty.
+  const activePlayers = game.players.filter((p) => !p.eliminated);
+
+  const activePlayerCount = activePlayers.length;
+
+  const everyoneAtStart =
+    activePlayerCount > 0 &&
+    activePlayers.every((p) => p.tileId === START_TILE_ID);
+
+  const eligibleCards = LOTTERY_CARDS.filter(
+    (card) =>
+      // Lotteri 017 requires at least 3 players.
+      (activePlayerCount > 2 || card.effect.type !== "everyonePaysRent") &&
+      // Lotteri 021 cannot be drawn when
+      // everybody is standing at Start.
+      (!everyoneAtStart || card.effect.type !== "backwardToPropertyOnRoll"),
+  );
+
+  if (eligibleCards.length === 0) {
+    return;
+  }
+
+  // Refill and reshuffle when needed.
   let deck = lotteryDecks.get(game);
 
   if (!deck || deck.length === 0) {
-    deck = shuffleLotteryCards(LOTTERY_CARDS);
+    deck = shuffleLotteryCards(eligibleCards);
     lotteryDecks.set(game, deck);
   }
 
-  const card = deck.pop();
+  let card = deck.pop();
+
+  // The existing deck may still contain
+  // Lotteri 017 from when more players
+  // were active. Skip invalid cards.
+
+  while (
+    card &&
+    ((activePlayerCount <= 2 && card.effect.type === "everyonePaysRent") ||
+      (everyoneAtStart && card.effect.type === "backwardToPropertyOnRoll"))
+  ) {
+    card = deck.pop();
+  }
+
+  // The remaining deck contained no valid
+  // cards. Refill using only eligible cards.
+  if (!card) {
+    deck = shuffleLotteryCards(eligibleCards);
+    lotteryDecks.set(game, deck);
+    card = deck.pop();
+  }
 
   if (!card) {
     return;
   }
 
-  // REPLACE the old rule.
-  // Never keep multiple Lotteri rules active.
+  // A new Lotteri releases everyone
+  // frozen by Lotteri 022.
+  lottery022FrozenPlayers.delete(game);
+
+  // Replace the old Lotteri rule.
   game.activeLotteryCard = card;
+
+  // Show the new card to everybody.
+  game.lotteryDrawVersion += 1;
 
   game.message =
     player.name + " drog ett Lotteri! Ny regel för alla: " + card.text;
 }
 
-function getLotteryChanceDrawCount(game: GameState, dice: number): number {
+function getLotteryChanceDrawCount(
+  game: GameState,
+  dice: number,
+  playerId: string,
+): number {
   const card = game.activeLotteryCard;
 
   if (!card) {
@@ -1790,12 +2258,41 @@ function getLotteryChanceDrawCount(game: GameState, dice: number): number {
   }
 
   switch (card.effect.type) {
-    case "drawChanceOnRoll": {
+    case "drawChanceOnRoll":
       return card.effect.rolls.includes(dice) ? card.effect.amount : 0;
+
+    case "drawChancePerRollIfOwnsProperties": {
+      const ownedCount = (Object.keys(game.ownership) as PropertyId[]).filter(
+        (propertyId) => game.ownership[propertyId] === playerId,
+      ).length;
+
+      return ownedCount >= card.effect.minimumProperties
+        ? card.effect.amount
+        : 0;
     }
+    case "discountBankProperties":
+    case "drawChanceWhenReceivingRent":
+    case "badLotteryDiceMovement":
+    case "closeHospitalAndRepairShop":
+    case "backwardToPropertyOnRoll":
+    case "evilChanceSquares":
+    case "gainMoneyPerDicePip":
+    case "disableAlternativeRoutes":
+    case "everyonePaysRent":
+    case "everyoneDrawsChanceOnLanding":
+    case "swapPlayersOnRoll":
+    case "lastPlayerRollsMultipleDice":
+    case "addMovementStepsOnRoll":
+    case "disableChanceCards":
+    case "extraRollOrSkipTurn":
+    case "reverseChanceMoney":
+    case "payTaxPerDicePip":
+    case "losePropertyOnRoll":
     case "everyoneGainsOnRoll":
-      return 0;
     case "loseMoneyPercentageOnRoll":
+    case "multiplyChanceCardsOnLanding":
+    case "givePropertyWhenPayingRent":
+    case "multiplyPropertyRent":
       return 0;
   }
 }
@@ -1814,6 +2311,137 @@ function applyLotteryRuleOnDice(
   }
 
   switch (card.effect.type) {
+    case "discountBankProperties":
+      // Applied when the bank offers an Aktiebrev.
+      break;
+    case "drawChanceWhenReceivingRent":
+      // Handled when an Aktiebrev owner receives rent.
+      break;
+    case "badLotteryDiceMovement":
+      // Handled by beginRoll() and completeRoll().
+      break;
+    case "closeHospitalAndRepairShop":
+      // Handled by movement and turn management.
+      break;
+    case "backwardToPropertyOnRoll":
+      // Handled by beginRoll() and completeRoll().
+      break;
+    case "evilChanceSquares":
+      // Handled when landing on a Frågekort square.
+      break;
+    case "disableAlternativeRoutes":
+      // Handled by calculateMovement().
+      break;
+    case "everyonePaysRent":
+      // Handled when a player pays property rent.
+      break;
+    case "everyoneDrawsChanceOnLanding":
+      // Handled when landing on a Frågekort square.
+      break;
+    case "swapPlayersOnRoll":
+      // Handled in beginRoll().
+      break;
+    case "lastPlayerRollsMultipleDice":
+      // Extra dice are handled in beginRoll().
+      break;
+    case "addMovementStepsOnRoll":
+      // The movement bonus is handled in beginRoll().
+      break;
+    case "disableChanceCards":
+      // Handled by showChanceCard().
+      break;
+    case "extraRollOrSkipTurn":
+      // Handled through the resolution queue.
+      break;
+    case "reverseChanceMoney":
+      // Handled by Frågekort money effects.
+      break;
+    case "losePropertyOnRoll":
+      // Handled through the resolution queue.
+      break;
+    case "drawChancePerRollIfOwnsProperties":
+      // Handled in completeRoll() and rollChanceDice().
+      break;
+    case "multiplyPropertyRent":
+      // Handled by resolveProperty().
+      break;
+    case "givePropertyWhenPayingRent":
+      // Handled when paying rent in resolveProperty().
+      break;
+    case "multiplyChanceCardsOnLanding":
+      // This rule is handled by resolveLanding().
+      break;
+
+    case "gainMoneyPerDicePip": {
+      const effect = card.effect;
+
+      // The owner of Svensk Bank is exempt.
+      if (game.ownership[effect.exemptPropertyId] === playerId) {
+        break;
+      }
+
+      const player = game.players.find(
+        (p) => p.id === playerId && !p.eliminated,
+      );
+
+      if (!player) {
+        break;
+      }
+
+      // Add the results of every physical die.
+      const totalPips = diceValues.reduce((sum, dice) => sum + dice, 0);
+
+      const reward = totalPips * effect.amountPerPip;
+
+      player.money += reward;
+
+      game.message =
+        player.name +
+        " inkasserade " +
+        reward.toLocaleString("sv-SE") +
+        " kr från Banken (" +
+        totalPips +
+        " prickar).";
+
+      break;
+    }
+
+    case "payTaxPerDicePip": {
+      const effect = card.effect;
+
+      // The owner of Svensk Bank pays no tax.
+      if (game.ownership[effect.exemptPropertyId] === playerId) {
+        break;
+      }
+
+      const player = game.players.find(
+        (p) => p.id === playerId && !p.eliminated,
+      );
+
+      if (!player) {
+        break;
+      }
+
+      // Count every dot on every die.
+      const totalPips = diceValues.reduce((sum, dice) => sum + dice, 0);
+
+      const tax = totalPips * effect.amountPerPip;
+
+      // Don't let the cash balance become negative.
+      const amountPaid = Math.min(Math.max(0, player.money), tax);
+
+      player.money -= amountPaid;
+
+      game.message =
+        player.name +
+        " betalade " +
+        amountPaid.toLocaleString("sv-SE") +
+        " kr i skatt (" +
+        totalPips +
+        " prickar).";
+
+      break;
+    }
     case "loseMoneyPercentageOnRoll": {
       const effect = card.effect;
 
@@ -2480,6 +3108,50 @@ function respondToRockPaperScissors(
   return true;
 }
 
+function getChanceMoneyMultiplier(game: GameState): number {
+  const effect = game.activeLotteryCard?.effect;
+
+  if (effect?.type === "reverseChanceMoney") {
+    return effect.multiplier;
+  }
+
+  return 1;
+}
+
+function changeChanceBankMoney(
+  game: GameState,
+  player: GamePlayer,
+  amount: number,
+): void {
+  // Positive = receive money.
+  // Negative = pay money.
+  const adjustedAmount = amount * getChanceMoneyMultiplier(game);
+
+  if (adjustedAmount >= 0) {
+    player.money += adjustedAmount;
+
+    game.message =
+      player.name +
+      " inkasserade " +
+      adjustedAmount.toLocaleString("sv-SE") +
+      " kr från Banken.";
+  } else {
+    const payment = Math.min(Math.max(0, player.money), -adjustedAmount);
+
+    player.money -= payment;
+
+    game.message =
+      player.name +
+      " betalade " +
+      payment.toLocaleString("sv-SE") +
+      " kr till Banken.";
+
+    if (player.money <= 0) {
+      eliminatePlayer(game, player);
+    }
+  }
+}
+
 // Apply an individual card effect.
 function applyChanceEffect(
   game: GameState,
@@ -2487,6 +3159,69 @@ function applyChanceEffect(
   effect: ChanceEffect,
 ) {
   switch (effect.type) {
+    case "swapPlayerPositionsWithoutLanding": {
+      const target = game.players.find(
+        (other) =>
+          other.id === effect.targetPlayerId &&
+          !other.eliminated &&
+          other.id !== player.id,
+      );
+
+      if (!target) {
+        game.message = "Det finns ingen spelare att byta plats med.";
+        break;
+      }
+
+      // Remember both positions.
+      const originalTileId = player.tileId;
+      const targetTileId = target.tileId;
+
+      // Exchange positions instantly.
+      player.tileId = targetTileId;
+      target.tileId = originalTileId;
+
+      game.message =
+        player.name +
+        " bytte plats med " +
+        target.name +
+        " med teleporteringsmaskinen!";
+
+      // IMPORTANT:
+      // Do NOT call resolveLanding().
+      // Do NOT queue a landing task.
+      // Neither player activates the new square.
+
+      break;
+    }
+
+    case "transferRentProperty": {
+      const recipient = getActivePlayer(game, effect.recipientId);
+
+      if (!recipient || player.eliminated) {
+        break;
+      }
+
+      // Only transfer a property the
+      // paying player still owns.
+      if (game.ownership[effect.propertyId] !== player.id) {
+        break;
+      }
+
+      game.ownership[effect.propertyId] = recipient.id;
+
+      const property = game.properties[effect.propertyId];
+
+      game.message =
+        player.name +
+        " gav aktiebrevet " +
+        property.name +
+        " till " +
+        recipient.name +
+        " på grund av Lotteri 005!";
+
+      break;
+    }
+
     case "moveToNearestForest": {
       if (player.hospitalStay) {
         game.message = player.name + " måste stanna på Sjukhuset.";
@@ -5477,6 +6212,10 @@ function applyChanceEffect(
     }
 
     case "hospitalUntilLanding": {
+      if (blockClosedFacility(game, player, HOSPITAL_TILE_ID)) {
+        break;
+      }
+
       // Send the player directly to Sjukhuset.
       player.tileId = HOSPITAL_TILE_ID;
 
@@ -5726,7 +6465,12 @@ function applyChanceEffect(
 
       // Move everyone before resolving
       // any of the destination effects.
+
       for (const target of players) {
+        if (blockClosedFacility(game, target, destination.id)) {
+          continue;
+        }
+
         target.tileId = destination.id;
 
         // Handle a possible bus destination.
@@ -5870,14 +6614,30 @@ function applyChanceEffect(
     case "gainAllMoney": {
       const players = playersInOrder(game, player.id);
 
+      const amount = effect.amount * getChanceMoneyMultiplier(game);
+
       for (const target of players) {
-        target.money += effect.amount;
+        if (amount >= 0) {
+          target.money += amount;
+        } else {
+          const payment = Math.min(Math.max(0, target.money), -amount);
+
+          target.money -= payment;
+
+          if (target.money <= 0) {
+            eliminatePlayer(game, target);
+          }
+        }
       }
 
       game.message =
-        "Alla spelare inkasserade " +
-        effect.amount.toLocaleString("sv-SE") +
-        " kr var från Banken.";
+        amount >= 0
+          ? "Alla spelare inkasserade " +
+            amount.toLocaleString("sv-SE") +
+            " kr var."
+          : "Alla spelare betalade upp till " +
+            (-amount).toLocaleString("sv-SE") +
+            " kr var.";
 
       break;
     }
@@ -6122,6 +6882,10 @@ function applyChanceEffect(
 
       const destination = getTile(effect.tileId);
 
+      if (blockClosedFacility(game, player, destination.id)) {
+        break;
+      }
+
       player.tileId = destination.id;
 
       // Remember hospital visits privately.
@@ -6161,22 +6925,7 @@ function applyChanceEffect(
     }
 
     case "loseMoney": {
-      // Money is paid to Banken.
-      const amountPaid = Math.min(player.money, effect.amount);
-
-      player.money -= amountPaid;
-
-      game.message =
-        player.name +
-        " betalade " +
-        amountPaid.toLocaleString("sv-SE") +
-        " kr till Banken.";
-
-      // Eliminate players who reach zero.
-      if (player.money <= 0) {
-        eliminatePlayer(game, player);
-      }
-
+      changeChanceBankMoney(game, player, -effect.amount);
       break;
     }
 
@@ -6204,14 +6953,7 @@ function applyChanceEffect(
     }
 
     case "gainMoney": {
-      player.money += effect.amount;
-
-      game.message =
-        player.name +
-        " inkasserade " +
-        effect.amount.toLocaleString("sv-SE") +
-        " kr från Banken.";
-
+      changeChanceBankMoney(game, player, effect.amount);
       break;
     }
 
@@ -6415,8 +7157,35 @@ function rollChanceDice(
     game.message = player.name + " slog " + dice + " på frågekortet.";
   }
 
+  queueLotteryPropertyLoss(game, player.id, values);
+
   // Preserve Pengaträd rewards.
   awardMoneyPerRoll(game);
+
+  // Lotteri 007: an extra Frågekort after
+  // rolling dice inside a Frågekort.
+  const lotteryEffect = game.activeLotteryCard?.effect;
+
+  if (lotteryEffect?.type === "drawChancePerRollIfOwnsProperties") {
+    const ownedCount = (Object.keys(game.ownership) as PropertyId[]).filter(
+      (propertyId) => game.ownership[propertyId] === player.id,
+    ).length;
+
+    if (ownedCount >= lotteryEffect.minimumProperties) {
+      const count = lotteryEffect.amount;
+
+      // Queue the bonus Frågekort.
+      // The current Frågekort is resolved first.
+      prependTasks(game, {
+        type: "drawChance",
+        playerId: player.id,
+        remaining: count,
+        total: count,
+      });
+    }
+  }
+
+  queueLotteryExtraRollOrSkip(game, player.id, values);
 
   // Lotteri 002 also applies to dice
   // rolled inside Frågekort.
@@ -7038,7 +7807,98 @@ function resolveLanding(
   }
 
   if (destination.type === "chance") {
-    const count = destination.cardCount ?? 1;
+    // Lotteri 020: evil Frågekort squares.
+    const evilEffect = game.activeLotteryCard?.effect;
+
+    if (evilEffect?.type === "evilChanceSquares") {
+      const questionMarks = Math.min(
+        3,
+        Math.max(1, destination.cardCount ?? 1),
+      );
+
+      const steps = questionMarks * evilEffect.stepsPerQuestionMark;
+
+      // Use the existing backward movement logic.
+      const movement = calculateBackwardMovement(player.tileId, steps);
+
+      // Move directly without resolving another landing.
+      player.tileId = movement.tileId;
+
+      // Only ??? awards 1,000 kr.
+      const reward = questionMarks === 3 ? evilEffect.tripleReward : 0;
+
+      if (reward > 0) {
+        player.money += reward;
+      }
+
+      game.message =
+        player.name +
+        " hamnade på " +
+        "?".repeat(questionMarks) +
+        " och gick " +
+        steps +
+        " steg bakåt utan att dra frågekort." +
+        (reward > 0
+          ? " Inkasserade " +
+            reward.toLocaleString("sv-SE") +
+            " kr från Banken."
+          : "");
+
+      // Lotteri 020:
+      // Resolve EVERY destination after moving backward,
+      // not just another Frågekort square.
+      if (movement.path.length > 0) {
+        // Preserve existing rewards that expire
+        // when a player reaches a particular square.
+        expireMoneyPerRollRewards(game, player.tileId);
+
+        prependTasks(game, {
+          type: "landing",
+          playerId: player.id,
+          tileId: player.tileId,
+        });
+      }
+
+      // Do not draw a card for the original
+      // Frågekort square.
+      // The destination is handled by the queue.
+      return;
+    }
+
+    const lotteryEffect = game.activeLotteryCard?.effect;
+
+    // Lotteri 016:
+    // Everyone draws one Frågekort.
+    // The player who landed here goes first,
+    // followed by the players to the left.
+    if (lotteryEffect?.type === "everyoneDrawsChanceOnLanding") {
+      const players = playersInOrder(game, player.id);
+
+      const tasks: ResolutionTask[] = players.map((targetPlayer) => ({
+        type: "drawChance",
+        playerId: targetPlayer.id,
+        remaining: lotteryEffect.amountPerPlayer,
+        total: lotteryEffect.amountPerPlayer,
+      }));
+
+      prependTasks(game, ...tasks);
+
+      game.message =
+        player.name +
+        " hamnade på Frågekort! " +
+        "Alla spelare ska ta ett frågekort.";
+
+      return;
+    }
+
+    // Normal Frågekort rules.
+    let count = destination.cardCount ?? 1;
+
+    // Lotteri 004: draw twice as many
+    // cards when landing on a Frågekort.
+    if (lotteryEffect?.type === "multiplyChanceCardsOnLanding") {
+      count *= lotteryEffect.multiplier;
+    }
 
     showChanceCard(game, player, count, count);
 
@@ -7050,7 +7910,6 @@ function resolveLanding(
     return;
   }
 
-  //
   // Buss is handled during movement.
   // Genväg and Senväg affect the next move.
   // Other squares require no action.
@@ -7070,10 +7929,137 @@ export interface MovementPlan {
   // An even odd-only roll must not
   // trigger the current square again.
   skipLanding?: boolean;
+
+  coldFallback?: boolean;
+
+  badLotteryDestination?: "start" | "repairShop" | "backwardLottery";
+}
+
+function queueLotteryPropertyLoss(
+  game: GameState,
+  playerId: string,
+  diceValues: number[],
+): void {
+  const effect = game.activeLotteryCard?.effect;
+
+  if (effect?.type !== "losePropertyOnRoll") {
+    return;
+  }
+
+  // One penalty per roll, even if two dice
+  // both show 1.
+  const rolls = effect.rolls;
+
+  const rolledOne = diceValues.some((dice) => rolls.includes(dice));
+
+  if (!rolledOne) {
+    return;
+  }
+
+  prependTasks(game, {
+    type: "lotteryPropertyLoss",
+    playerId,
+    fallbackAmount: effect.fallbackAmount,
+  });
+}
+
+function queueLotteryExtraRollOrSkip(
+  game: GameState,
+  playerId: string,
+  diceValues: number[],
+): void {
+  const effect = game.activeLotteryCard?.effect;
+
+  if (effect?.type !== "extraRollOrSkipTurn") {
+    return;
+  }
+
+  // One bonus or penalty per rolling action.
+  const rolledSix = diceValues.some((dice) =>
+    effect.extraRollOn.includes(dice),
+  );
+
+  const rolledOne = diceValues.some((dice) => effect.skipTurnOn.includes(dice));
+
+  const tasks: ResolutionTask[] = [];
+
+  if (rolledOne) {
+    tasks.push({
+      type: "effect",
+      playerId,
+      effect: {
+        type: "skipTurns",
+        amount: effect.skipTurns,
+      },
+    });
+  }
+
+  if (rolledSix) {
+    tasks.push({
+      type: "bonusRoll",
+      playerId,
+    });
+  }
+
+  if (tasks.length > 0) {
+    prependTasks(game, ...tasks);
+  }
+}
+
+function getLastPlayerId(game: GameState): string | null {
+  const activePlayers = game.players.filter((player) => !player.eliminated);
+
+  if (activePlayers.length === 0) {
+    return null;
+  }
+
+  const getPosition = (tileId: string) =>
+    game.board.findIndex((tile) => tile.id === tileId);
+
+  // Use turn order to break ties.
+  const lastPlayer = activePlayers.reduce((last, current) =>
+    getPosition(current.tileId) < getPosition(last.tileId) ? current : last,
+  );
+
+  return lastPlayer.id;
+}
+
+function findBackwardPathToProperty(
+  game: GameState,
+  fromTileId: string,
+  propertyId: PropertyId,
+): string[] | null {
+  let currentTileId = fromTileId;
+  const path: string[] = [];
+  const visited = new Set<string>([fromTileId]);
+
+  while (currentTileId !== START_TILE_ID) {
+    // Follow the ordinary board route backward.
+    const previousTile = game.board.find(
+      (tile) => tile.nextTileId === currentTileId,
+    );
+
+    if (!previousTile || visited.has(previousTile.id)) {
+      break;
+    }
+
+    path.push(previousTile.id);
+    visited.add(previousTile.id);
+    currentTileId = previousTile.id;
+
+    if (
+      previousTile.type === "property" &&
+      previousTile.propertyId === propertyId
+    ) {
+      return path;
+    }
+  }
+
+  // No matching property was found behind.
+  return null;
 }
 
 // 1. Begin the roll and calculate the journey.
-
 export function beginRoll(
   game: GameState,
   playerId: string,
@@ -7084,6 +8070,10 @@ export function beginRoll(
   }
 
   const player = game.players[game.turnIndex];
+
+  if (isFrozenByLottery022(game, player.id)) {
+    return null;
+  }
 
   if (player.id !== playerId || player.eliminated) {
     return null;
@@ -7097,13 +8087,118 @@ export function beginRoll(
     return null;
   }
 
-  // Apply the current Lotteri rule once
-  // for this normal movement die.
-  applyLotteryRuleOnDice(game, player.id, [dice]);
+  // Lotteri 015: swap positions instead of moving.
+  const teleportEffect = game.activeLotteryCard?.effect;
+
+  if (
+    teleportEffect?.type === "swapPlayersOnRoll" &&
+    teleportEffect.rolls.includes(dice)
+  ) {
+    // Wait until the current roll is completed,
+    // then ask which player to swap with.
+    prependTasks(game, {
+      type: "teleportSwapChoice",
+      playerId: player.id,
+    });
+
+    game.lastRoll = dice;
+    game.phase = "moving";
+
+    game.message =
+      player.name + " slog en 6a och aktiverade teleporteringsmaskinen!";
+
+    // This was still a real dice roll.
+    awardMoneyPerRoll(game);
+
+    // No movement and no landing effects.
+    return {
+      playerId,
+      dice,
+      path: [],
+      tileId: player.tileId,
+      busFrom: null,
+      skipLanding: true,
+    };
+  }
+
+  // Lotteri 014: the last player uses three dice.
+  const lotteryEffect = game.activeLotteryCard?.effect;
+
+  const diceCount =
+    lotteryEffect?.type === "lastPlayerRollsMultipleDice" &&
+    getLastPlayerId(game) === player.id
+      ? lotteryEffect.diceCount
+      : 1;
+
+  const diceValues = [dice];
+
+  for (let i = 1; i < diceCount; i++) {
+    diceValues.push(randomInt(1, 7));
+  }
+
+  const diceTotal = diceValues.reduce((sum, value) => sum + value, 0);
+
+  queueLotteryExtraRollOrSkip(game, player.id, diceValues);
+
+  queueLotteryPropertyLoss(game, player.id, diceValues);
+
+  applyLotteryRuleOnDice(game, player.id, diceValues);
 
   // ---------------------------------
   // NEW: ODD-ONLY BONUS ROLLS
   // ---------------------------------
+
+  // Lotteri 021: rolls of 1 or 2 replace
+  // normal movement with backward movement.
+  const coldEffect = game.activeLotteryCard?.effect;
+
+  if (coldEffect?.type === "backwardToPropertyOnRoll") {
+    const destination = coldEffect.destinations.find(
+      (item) => item.roll === dice,
+    );
+
+    if (destination) {
+      const propertyPath = findBackwardPathToProperty(
+        game,
+        player.tileId,
+        destination.propertyId,
+      );
+
+      // If the property isn't behind us,
+      // follow the ordinary route back to Start.
+      const fallback = propertyPath === null;
+
+      const movement = fallback
+        ? calculateBackwardMovement(player.tileId, game.board.length)
+        : null;
+
+      const path = propertyPath ?? movement!.path;
+      const destinationTileId = path[path.length - 1] ?? player.tileId;
+
+      game.lastRoll = dice;
+      game.phase = "moving";
+
+      game.message = fallback
+        ? player.name + " slog " + dice + " och går tillbaka till Start!"
+        : player.name +
+          " slog " +
+          dice +
+          " och går bakåt till " +
+          game.properties[destination.propertyId].name +
+          "!";
+
+      awardMoneyPerRoll(game);
+
+      return {
+        playerId,
+        dice,
+        path,
+        tileId: destinationTileId,
+        busFrom: null,
+        coldFallback: fallback,
+      };
+    }
+  }
 
   const oddOnly = oddOnlyBonusRolls.get(game) === player.id;
 
@@ -7132,17 +8227,100 @@ export function beginRoll(
     };
   }
 
+  // Lotteri 023: special movement on 1, 2 or 6.
+  const badLotteryEffect = game.activeLotteryCard?.effect;
+
+  if (
+    badLotteryEffect?.type === "badLotteryDiceMovement" &&
+    (dice === badLotteryEffect.startRoll ||
+      dice === badLotteryEffect.repairShopRoll ||
+      dice === badLotteryEffect.backwardLotteryRoll)
+  ) {
+    let destinationTileId = player.tileId;
+    let path: string[] = [];
+
+    let outcome: NonNullable<MovementPlan["badLotteryDestination"]>;
+
+    if (dice === badLotteryEffect.startRoll) {
+      // Roll 1: go directly to Start.
+      destinationTileId = START_TILE_ID;
+      outcome = "start";
+    } else if (dice === badLotteryEffect.repairShopRoll) {
+      // Roll 2: go directly to Bilverkstan.
+      const repairShop = game.board.find((tile) => tile.type === "repairShop");
+
+      if (!repairShop) {
+        return null;
+      }
+
+      destinationTileId = repairShop.id;
+      outcome = "repairShop";
+    } else {
+      // Roll 6: move six steps backward.
+      const movement = calculateBackwardMovement(
+        player.tileId,
+        badLotteryEffect.backwardSteps,
+      );
+
+      // Don't activate a bus teleport.
+      // This Lotteri only requires walking backward.
+      destinationTileId = movement.busFrom ?? movement.tileId;
+
+      path = movement.busFrom ? movement.path.slice(0, -1) : movement.path;
+
+      outcome = "backwardLottery";
+    }
+
+    game.lastRoll = dice;
+    game.phase = "moving";
+
+    game.message =
+      player.name + " slog " + dice + " och aktiverade Dåligt lotteri!";
+
+    // This is still a normal dice roll.
+    awardMoneyPerRoll(game);
+
+    return {
+      playerId,
+      dice,
+      path,
+      tileId: destinationTileId,
+      busFrom: null,
+      badLotteryDestination: outcome,
+    };
+  }
+
   // ---------------------------------
   // EXISTING MOVEMENT BONUSES
   // ---------------------------------
 
   const multiplier = player.nextRollMultiplier;
-
   const bonus = player.nextRollBonus;
 
-  const steps = dice * multiplier + bonus;
+  // Lotteri 013: +3 movement steps,
+  // except for owners of the listed properties.
+  let lotteryBonus = 0;
 
-  const movement = calculateMovement(player.tileId, steps);
+  if (lotteryEffect?.type === "addMovementStepsOnRoll") {
+    const isExempt = lotteryEffect.exemptPropertyIds.some(
+      (propertyId) => game.ownership[propertyId] === player.id,
+    );
+
+    if (!isExempt) {
+      lotteryBonus = lotteryEffect.extraSteps;
+    }
+  }
+
+  const steps = diceTotal * multiplier + bonus + lotteryBonus;
+
+  const disableAlternativeRoutes =
+    game.activeLotteryCard?.effect.type === "disableAlternativeRoutes";
+
+  const movement = calculateMovement(
+    player.tileId,
+    steps,
+    disableAlternativeRoutes,
+  );
 
   // Consume the saved bonuses.
   player.nextRollMultiplier = 1;
@@ -7153,7 +8331,7 @@ export function beginRoll(
   // Lock the game during movement.
   game.phase = "moving";
 
-  let calculation = String(dice);
+  let calculation = diceValues.join(" + ");
 
   if (multiplier > 1) {
     calculation += " × " + multiplier;
@@ -7163,7 +8341,11 @@ export function beginRoll(
     calculation += " + " + bonus;
   }
 
-  if (multiplier > 1 || bonus > 0) {
+  if (lotteryBonus > 0) {
+    calculation += " + " + lotteryBonus;
+  }
+
+  if (diceCount > 1 || multiplier > 1 || bonus > 0 || lotteryBonus > 0) {
     game.message =
       player.name + " slog " + calculation + " = " + steps + " steg!";
   } else {
@@ -7181,7 +8363,6 @@ export function beginRoll(
 }
 
 // 2. Resolve the destination once movement is done.
-
 export function completeRoll(game: GameState, movement: MovementPlan): boolean {
   if (game.phase !== "moving" || game.winnerId) {
     return false;
@@ -7193,9 +8374,44 @@ export function completeRoll(game: GameState, movement: MovementPlan): boolean {
     return false;
   }
 
+  // Lotteri 023: finish special movement.
+  if (movement.badLotteryDestination) {
+    player.tileId = movement.tileId;
+
+    const destination = getTile(player.tileId);
+
+    // The card defines the entire landing effect.
+    // Don't resolve the destination square.
+    if (movement.badLotteryDestination === "backwardLottery") {
+      // Roll 6: move backward and draw
+      // a replacement Lotteri.
+      drawLotteryCard(game, player.id);
+    } else {
+      game.message =
+        player.name +
+        " slog " +
+        movement.dice +
+        " och gick till " +
+        destination.name +
+        ".";
+    }
+
+    // IMPORTANT:
+    // No resolveLanding() call.
+    // No landing task is queued.
+    resumeResolution(game);
+
+    return true;
+  }
+
   // Read the active Lotteri rule BEFORE
   // resolving the destination square.
-  const lotteryChanceCount = getLotteryChanceDrawCount(game, movement.dice);
+
+  const lotteryChanceCount = getLotteryChanceDrawCount(
+    game,
+    movement.dice,
+    player.id,
+  );
 
   const lotteryChanceTask: ResolutionTask[] =
     lotteryChanceCount > 0
@@ -7241,7 +8457,14 @@ export function completeRoll(game: GameState, movement: MovementPlan): boolean {
   // ---------------------------------
 
   if (movement.skipLanding) {
-    game.message = player.name + " slog " + movement.dice + " och står kvar.";
+    if (
+      game.activeLotteryCard?.effect.type === "swapPlayersOnRoll" &&
+      movement.dice === 6
+    ) {
+      game.message = player.name + " aktiverade teleporteringsmaskinen!";
+    } else {
+      game.message = player.name + " slog " + movement.dice + " och står kvar.";
+    }
 
     prependTasks(game, ...lotteryChanceTask);
 
@@ -7256,7 +8479,55 @@ export function completeRoll(game: GameState, movement: MovementPlan): boolean {
   // EXISTING LANDING LOGIC
   // ---------------------------------
 
+  // Lotteri 022: do not enter a closed facility.
+  if (blockClosedFacility(game, player, movement.tileId)) {
+    // The player's original tileId is unchanged.
+    // Continue the game's normal resolution queue.
+    resumeResolution(game);
+    return true;
+  }
+
   player.tileId = movement.tileId;
+
+  // Lotteri 021: penalty when no matching
+  // property exists behind the player.
+  if (movement.coldFallback) {
+    const effect = game.activeLotteryCard?.effect;
+
+    if (effect?.type === "backwardToPropertyOnRoll") {
+      const ownerId = game.ownership[effect.fallbackPenaltyPropertyId];
+
+      const owner = ownerId ? getActivePlayer(game, ownerId) : undefined;
+
+      // Banken cannot pay a penalty to itself.
+      if (owner) {
+        const payment = Math.min(
+          Math.max(0, owner.money),
+          effect.fallbackPenalty,
+        );
+
+        owner.money -= payment;
+
+        if (owner.money <= 0) {
+          eliminatePlayer(game, owner);
+        }
+      }
+    }
+  }
+
+  // Lotteri 021: if everyone is now at Start,
+  // draw another Lotteri immediately.
+  if (game.activeLotteryCard?.effect.type === "backwardToPropertyOnRoll") {
+    const activePlayers = game.players.filter((p) => !p.eliminated);
+
+    const everyoneAtStart =
+      activePlayers.length > 0 &&
+      activePlayers.every((p) => p.tileId === START_TILE_ID);
+
+    if (everyoneAtStart) {
+      drawLotteryCard(game, activePlayers[0].id);
+    }
+  }
 
   const destination = getTile(player.tileId);
 

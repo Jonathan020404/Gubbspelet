@@ -11,6 +11,56 @@ export function describeChanceEffect(
   game: GameState,
 ): EffectDescription[] {
   switch (effect.type) {
+    case "swapPlayerPositionsWithoutLanding": {
+      const target = game.players.find((p) => p.id === effect.targetPlayerId);
+
+      return [
+        {
+          icon: "🌀",
+          title: "Byt plats med " + (target?.name ?? "spelaren"),
+          description:
+            "Ni byter plats direkt. " +
+            "Ingen av er påverkas av rutan " +
+            "som ni hamnar på.",
+        },
+      ];
+    }
+
+    case "drawChancePerRollIfOwnsProperties":
+      return [
+        {
+          icon: "🎩",
+          title: "Extra frågekort vid tärningsslag",
+          description:
+            "Om du äger minst " +
+            effect.minimumProperties +
+            " aktiebrev ska du dra " +
+            effect.amount +
+            " extra frågekort varje gång du slår tärningen.",
+        },
+      ];
+
+    case "transferRentProperty": {
+      const property = game.properties[effect.propertyId];
+
+      const recipient = game.players.find(
+        (player) => player.id === effect.recipientId,
+      );
+
+      return [
+        {
+          icon: "📜",
+          title: "Överlämna aktiebrev",
+          description:
+            "Ge " +
+            property.name +
+            " till " +
+            (recipient?.name ?? "den andra spelaren") +
+            ".",
+        },
+      ];
+    }
+
     case "moveToNearestForest":
       return [
         {

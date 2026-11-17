@@ -11,6 +11,7 @@ import {
   respondToChance,
   hasGroupMovement,
   advanceGroupMovement,
+  sellProperty,
 } from "./game/engine";
 
 import type { GameState } from "./game/engine";
@@ -327,6 +328,45 @@ io.on("connection", (socket) => {
 
     io.to(code).emit("roomUpdated", room);
     scheduleGroupMovement(room);
+  });
+
+  // Sell an owned Aktiebrev back to Banken.
+  socket.on("sellProperty", (propertyId: unknown) => {
+    const code = socket.data.roomCode;
+
+    if (typeof code !== "string") {
+      return;
+    }
+
+    const room = rooms.get(code);
+
+    if (!room?.game) {
+      return;
+    }
+
+    // Never trust a property ID sent by the client.
+    if (
+      typeof propertyId !== "string" ||
+      !Object.prototype.hasOwnProperty.call(room.game.properties, propertyId)
+    ) {
+      return;
+    }
+
+    // socket.id identifies the player.
+    // The engine verifies ownership and turn permissions.
+    const success = sellProperty(
+      room.game,
+      socket.id,
+      propertyId as keyof typeof room.game.properties,
+    );
+
+    if (!success) {
+      socket.emit("roomError", "Du kan inte sälja detta aktiebrev just nu.");
+      return;
+    }
+
+    // Update the money and ownership for everyone.
+    io.to(code).emit("roomUpdated", room);
   });
 
   socket.on("continueChance", (token: unknown, choiceIndex?: unknown) => {

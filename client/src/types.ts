@@ -91,6 +91,53 @@ export interface PurchaseOffer {
 
 export type LotteryEffect =
   | {
+      type: "discountBankProperties";
+      multiplier: number;
+    }
+  | {
+      type: "drawChanceWhenReceivingRent";
+      amount: number;
+    }
+  | {
+      type: "badLotteryDiceMovement";
+      startRoll: number;
+      repairShopRoll: number;
+      backwardLotteryRoll: number;
+      backwardSteps: number;
+    }
+  | {
+      type: "closeHospitalAndRepairShop";
+    }
+  | {
+      type: "backwardToPropertyOnRoll";
+      destinations: {
+        roll: number;
+        propertyId: PropertyId;
+      }[];
+      fallbackPenaltyPropertyId: PropertyId;
+      fallbackPenalty: number;
+    }
+  | {
+      type: "evilChanceSquares";
+      stepsPerQuestionMark: number;
+      tripleReward: number;
+    }
+  | {
+      type: "gainMoneyPerDicePip";
+      amountPerPip: number;
+      exemptPropertyId: PropertyId;
+    }
+  | {
+      type: "disableAlternativeRoutes";
+    }
+  | {
+      type: "everyonePaysRent";
+    }
+  | {
+      type: "everyoneDrawsChanceOnLanding";
+      amountPerPlayer: number;
+    }
+  | {
       type: "drawChanceOnRoll";
       rolls: number[];
       amount: number;
@@ -104,6 +151,53 @@ export type LotteryEffect =
       type: "loseMoneyPercentageOnRoll";
       rolls: number[];
       percent: number;
+    }
+  | {
+      type: "multiplyChanceCardsOnLanding";
+      multiplier: number;
+    }
+  | {
+      type: "givePropertyWhenPayingRent";
+    }
+  | {
+      type: "multiplyPropertyRent";
+      multiplier: number;
+    }
+  | {
+      type: "losePropertyOnRoll";
+      rolls: number[];
+      fallbackAmount: number;
+    }
+  | {
+      type: "payTaxPerDicePip";
+      amountPerPip: number;
+      exemptPropertyId: PropertyId;
+    }
+  | {
+      type: "reverseChanceMoney";
+      multiplier: -1;
+    }
+  | {
+      type: "extraRollOrSkipTurn";
+      extraRollOn: number[];
+      skipTurnOn: number[];
+      skipTurns: number;
+    }
+  | {
+      type: "disableChanceCards";
+    }
+  | {
+      type: "addMovementStepsOnRoll";
+      extraSteps: number;
+      exemptPropertyIds: PropertyId[];
+    }
+  | {
+      type: "lastPlayerRollsMultipleDice";
+      diceCount: number;
+    }
+  | {
+      type: "swapPlayersOnRoll";
+      rolls: number[];
     };
 
 export interface LotteryCard {
@@ -113,6 +207,15 @@ export interface LotteryCard {
 }
 
 export type ChanceEffect =
+  | {
+      type: "swapPlayerPositionsWithoutLanding";
+      targetPlayerId: string;
+    }
+  | {
+      type: "transferRentProperty";
+      propertyId: PropertyId;
+      recipientId: string;
+    }
   | {
       type: "skipTurns";
       amount: number;
@@ -637,6 +740,11 @@ export type ChanceEffect =
     }
   | {
       type: "endGameWithoutWinner";
+    }
+  | {
+      type: "drawChancePerRollIfOwnsProperties";
+      minimumProperties: number;
+      amount: number;
     };
 
 export interface ChanceCard {
@@ -717,6 +825,7 @@ export interface GameState {
   chanceDraw: ChanceDraw | null;
   moneyPerRollRewards: MoneyPerRollReward[];
   activeLotteryCard: LotteryCard | null;
+  lotteryDrawVersion: number;
 }
 
 export interface Room {
